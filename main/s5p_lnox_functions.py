@@ -248,14 +248,31 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
         lightning_points = lon_lat.to_array().transpose('all', ...)
 
         mask = in_hull(pixel_points, lightning_points).reshape(scn['nitrogendioxide_tropospheric_column'].shape, order='F')
-        if kind == 'clean':
-            # clean lightning 1abel: 1, 2, ....
-            lightning_mask = xr.where(mask, index+1, lightning_mask)
-        elif kind == 'polluted':
-            # polluted lightning 1abel: -1, -2, ....
-            lightning_mask = xr.where(mask, -index-1, lightning_mask)
 
-    return ds, lightning_mask
+        # get the overplapped label
+        overlapped_label = np.delete(np.unique(lightning_mask.where(xr.DataArray(mask, dims=['y', 'x']), 0)), 0)
+
+        if len(overlapped_label) == 0:
+            if kind == 'clean':
+                # clean lightning 1abel: 1, 2, ....
+                lightning_mask = xr.where(mask, index+1, lightning_mask)
+            elif kind == 'polluted':
+                # polluted lightning 1abel: -1, -2, ....
+                lightning_mask = xr.where(mask, -index-1, lightning_mask)
+        elif len(overlapped_label) == 1:
+            # set to the only overlapped value
+            if kind == 'clean':
+                lightning_mask = xr.where(mask, overlapped_label[0], lightning_mask)
+            elif kind == 'polluted':
+                lightning_mask = xr.where(mask, overlapped_label[0], lightning_mask)
+        else:
+            # assign minimum label to related labels
+            min_label = np.min(overlapped_label)
+            lightning_mask = xr.where(mask, min_label, lightning_mask)
+            for rest_label in np.delete(overlapped_label, min_label):
+                lightning_mask = lightning_mask.where(lightning_mask==rest_label, min_label)
+
+    return ds, lightning_mask.rename('lightning_mask')
 
 
 def concat_pred(ds):

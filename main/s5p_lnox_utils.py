@@ -302,7 +302,7 @@ def lightning_mask(scn, clean_cluster, polluted_cluster):
     lightning_mask = clean_lightning_mask + polluted_lightning_mask
     lightning_mask.attrs['description'] = '<0: labeled lightning with fire; 0: no lightning; >0: labeled lightning without fire'
 
-    return lightning_mask.rename('lightning_mask'), clean_cluster
+    return lightning_mask, clean_cluster
 
 
 def segmentation_mask(scn, masks_scn):

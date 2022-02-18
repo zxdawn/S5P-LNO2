@@ -52,7 +52,7 @@ def validate_path(path_in, var_name):
 
 def PointsInCircum(eachPoint, r, n=100):
     '''Check points in Circum'''
-    return [(eachPoint[0] + math.cos(2*math.pi/n*x)*r,eachPoint[1] + math.sin(2*math.pi/n*x)*r) for x in range(0,n+1)]
+    return [(eachPoint[0] + math.cos(2*math.pi/n*x)*r, eachPoint[1] + math.sin(2*math.pi/n*x)*r) for x in range(0, n+1)]
 
 
 def bufferPoints(inPoints, stretchCoef, n):
@@ -74,7 +74,7 @@ def get_large_hull(hulls, stretchCoef=1.2):
         stretchCoef = stretchCoef
         pointsStretched = bufferPoints(hull.points, stretchCoef, n=10)
         # ring = LinearRing(list(zip(pointsStretched[:, 1], pointsStretched[:, 0])))
-        large_hull.append(pointsStretched[:, [1,0]])
+        large_hull.append(pointsStretched[:, [1, 0]])
 
     return large_hull
 
@@ -180,8 +180,8 @@ def feature_mask(no2_finite, min_threshold=4e14, max_threshold=1e15, step_thresh
     if features is not None:
         masks_no2, features_no2 = tobac.themes.tobac_v1.segmentation(features, no2_finite, dxy, **parameters_segmentation)
 
-        masks_no2 = masks_no2.where(masks_no2>0).rename({'dim_0': 'y', 'dim_1': 'x'})
-        masks_no2 = masks_no2.assign_coords({'x': x_coord, 'y':y_coord})
+        masks_no2 = masks_no2.where(masks_no2 > 0).rename({'dim_0': 'y', 'dim_1': 'x'})
+        masks_no2 = masks_no2.assign_coords({'x': x_coord, 'y': y_coord})
 
         return masks_no2
     else:
@@ -199,7 +199,7 @@ def predict_loc(lon, lat, wdir, wspd, wdelta):
     lat2 = math.asin(math.sin(lat)*math.cos(d/R) + math.cos(lat)*math.sin(d/R)*math.cos(brng))
 
     lon2 = lon + math.atan2(math.sin(brng)*math.sin(d/R)*math.cos(lat),
-                math.cos(d/R)-math.sin(lat)*math.sin(lat2))
+                            math.cos(d/R)-math.sin(lat)*math.sin(lat2))
 
     lat2 = np.rad2deg(lat2)
     lon2 = np.rad2deg(lon2)
@@ -212,23 +212,23 @@ def in_hull(p, hull):
     Test if points in `p` are in `hull`
 
     `p` should be a `NxK` coordinates of `N` points in `K` dimensions
-    `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the 
+    `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the
     coordinates of `M` points in `K`dimensions for which Delaunay triangulation
     will be computed
 
     https://stackoverflow.com/a/16898636/7347925
     """
     from scipy.spatial import Delaunay
-    if not isinstance(hull,Delaunay):
+    if not isinstance(hull, Delaunay):
         hull = Delaunay(hull)
 
-    return hull.find_simplex(p)>=0
+    return hull.find_simplex(p) >= 0
 
 
 def convert_cluster(scn, df, lightning_mask, kind='clean'):
     '''Convert the lightning cluster DataFrame to Dataset which has the same shape of NO2'''
     # rename the label
-    df = df.rename(columns={'label':'lightning_label'})
+    df = df.rename(columns={'label': 'lightning_label'})
     # set label as index which is the coordinate of xarray Dataset
     df.set_index(['lightning_label'], inplace=True)
     # convert to Dataset
@@ -237,9 +237,10 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
     # get the pixel center points
     pixel_points = np.vstack((scn['nitrogendioxide_tropospheric_column'].longitude.stack(z=('x', 'y')),
                               scn['nitrogendioxide_tropospheric_column'].latitude.stack(z=('x', 'y')))
-                              ).T
+                             ).T
 
     labels = list(set(ds.lightning_label.values))
+    labels.remove(0)
 
     for index, label in enumerate(labels):
         # iterate each label and update the mask
@@ -269,8 +270,8 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
             # assign minimum label to related labels
             min_label = np.min(overlapped_label)
             lightning_mask = xr.where(mask, min_label, lightning_mask)
-            for rest_label in np.delete(overlapped_label, min_label):
-                lightning_mask = lightning_mask.where(lightning_mask==rest_label, min_label)
+            for rest_label in np.delete(overlapped_label, np.where(overlapped_label == min_label)):
+                lightning_mask = lightning_mask.where(lightning_mask != rest_label, min_label)
 
     return ds, lightning_mask.rename('lightning_mask')
 
@@ -283,8 +284,8 @@ def concat_pred(ds):
     levels = [int(name.split('_')[-1]) for name in lon_names]
 
     # concatenate into one array
-    ds['longitude_pred'] = ds[lon_names].to_array(dim='lon_level', name='longitude_pred').assign_coords(lon_level=levels).rename({'lon_level':'level'})
-    ds['latitude_pred'] = ds[lat_names].to_array(dim='lat_level', name='longitude_pred').assign_coords(lat_level=levels).rename({'lat_level':'level'})
+    ds['longitude_pred'] = ds[lon_names].to_array(dim='lon_level', name='longitude_pred').assign_coords(lon_level=levels).rename({'lon_level': 'level'})
+    ds['latitude_pred'] = ds[lat_names].to_array(dim='lat_level', name='longitude_pred').assign_coords(lat_level=levels).rename({'lat_level': 'level'})
     ds.coords['level'].attrs['units'] = 'hPa'
 
     # add description and units

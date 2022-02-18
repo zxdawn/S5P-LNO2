@@ -267,9 +267,11 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
             elif kind == 'polluted':
                 lightning_mask = xr.where(mask, overlapped_label[0], lightning_mask)
         else:
-            # assign minimum label to related labels
+            # get the minimum label
             min_label = np.min(overlapped_label)
+            # set the mask where lightning happens to minimum label
             lightning_mask = xr.where(mask, min_label, lightning_mask)
+            # update overlapped masks with minimum min label
             for rest_label in np.delete(overlapped_label, np.where(overlapped_label == min_label)):
                 lightning_mask = lightning_mask.where(lightning_mask != rest_label, min_label)
 

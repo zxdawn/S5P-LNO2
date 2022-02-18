@@ -42,6 +42,32 @@ def validation(cfg):
     validate_path(cfg['output_fig_dir'], 'output_fig_dir')
 
 
+def check_log(cfg, filename, logfile='processed_filenames.txt'):
+    '''Write processed filename into logfile'''
+    if not os.path.isfile(logfile):
+        # file not exist, create it first
+        open(logfile, 'a').close()
+
+    with open(logfile, 'r') as f_log:
+        # read the processed file list
+        file_list = f_log.read().splitlines()
+
+    with open(logfile, 'a+') as f_log:
+        if filename in file_list:
+            if not cfg.get('overwrite', 'True') == 'True':
+                # skip if the file exists
+                logging.info(f'File {filename} has already been processed, skipping')
+                continue_process = False
+            else:
+                continue_process = True
+        else:
+            # write processed filename to skip data processing if `overwrite==False`
+            f_log.write(f'{filename}\n')
+            continue_process = True
+
+    return continue_process
+
+
 def load_s5p_era5(f_s5p, cfg):
     '''Load s5p data'''
     logging.debug(' '*4+f'Reading {f_s5p} ...')

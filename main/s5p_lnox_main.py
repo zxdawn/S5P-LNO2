@@ -46,9 +46,8 @@ def process_data(filename, cfg):
                                os.path.basename(filename)[:-19]+'.nc'
                                )
 
-    # skip if the file exists
-    if os.path.isfile(output_file) and not cfg.get('overwrite', 'True') == 'True':
-        logging.info(f'File {output_file} already exists, skipping')
+    # whether continue processing data
+    if not check_log(cfg, basename):
         return
 
     # load s5p and era5 data

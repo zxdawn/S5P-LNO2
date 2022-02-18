@@ -370,6 +370,7 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
     # set compression
     comp = dict(zlib=True, complevel=7)
 
+    logging.info(' '*8 + f'Saving S5P products ...')
     scn.save_datasets(filename=output_file,
                       datasets=s5p_vnames,
                       groups={'S5P': s5p_vnames},
@@ -394,6 +395,7 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
         enc = {var: comp for var in clean_cluster.data_vars}
         clean_cluster.attrs['description'] = f"Clean lighting point data grouped by lightning_label, {cfg['delta_time']} minutes before TROPOMI overpass"
 
+        logging.info(' '*8 + f'Saving clustered clean lightning ...')
         clean_cluster.to_netcdf(path=output_file,
                                 group='Lightning',
                                 engine='netcdf4',
@@ -411,6 +413,7 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
         enc = {var: comp for var in ds_viirs.data_vars}
         ds_viirs.attrs['description'] = f"SNPP/VIIRS fire point data, {cfg['delta_time']} minutes before TROPOMI overpass"
 
+        logging.info(' '*8 + f'Saving Fire products ...')
         ds_viirs.to_netcdf(path=output_file,
                            group='Fire',
                            engine='netcdf4',

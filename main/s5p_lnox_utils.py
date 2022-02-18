@@ -8,7 +8,6 @@ UPDATE:
 
 import functools
 import logging
-import math
 import os
 import warnings
 from concurrent.futures import ProcessPoolExecutor as Pool
@@ -16,22 +15,18 @@ from datetime import timedelta
 from glob import glob
 from itertools import compress
 
-import cartopy.crs as ccrs
 import geopandas as gpd
-import geopy
 import metpy.calc as mpcalc
 import numpy as np
 import pandas as pd
-import shapely
 import xarray as xr
-from geopy.distance import geodesic
+# from geopy.distance import geodesic
 from metpy.units import units
+from s5p_lnox_functions import *
 from satpy import Scene
 from scipy.spatial import ConvexHull
 from shapely.geometry import MultiPoint, Point
 from sklearn.cluster import DBSCAN
-
-from s5p_lnox_functions import *
 
 warnings.filterwarnings('ignore')
 
@@ -54,8 +49,8 @@ def load_s5p_era5(f_s5p, cfg):
 
     vnames = ['time_utc', 'qa_value',
               'processing_quality_flags', 'geolocation_flags',
-            #   'latitude', 'longitude',
-            #   'latitude_bounds', 'longitude_bounds',
+              # 'latitude', 'longitude',
+              # 'latitude_bounds', 'longitude_bounds',
               'assembled_lon_bounds', 'assembled_lat_bounds',
               'nitrogendioxide_slant_column_density',
               'nitrogendioxide_tropospheric_column', 'nitrogendioxide_stratospheric_column',
@@ -88,7 +83,7 @@ def load_s5p_era5(f_s5p, cfg):
     return scn, vnames, t_overpass, ds_era5
 
 
-def load_lightning_fire(scn, t_overpass, cfg):#, delta_time):
+def load_lightning_fire(scn, t_overpass, cfg):
     '''Read lightning and fire data related to the S5P NO2 Scene'''
     # get lightning data on overpass day and one day before
     day_now = scn.attrs['end_time']
@@ -102,19 +97,19 @@ def load_lightning_fire(scn, t_overpass, cfg):#, delta_time):
     df_lightning = pd.concat(map(pd.read_csv, lightning_list))
     df_lightning = df_lightning[df_lightning.latitude >= cfg['lat_min']]
     logging.debug(f"    Reading {glob(cfg['fire_dir']+'/*.csv')} ...")
-    df_viirs = pd.concat((pd.read_csv(f, dtype={'acq_time':'str'}) for f in glob(cfg['fire_dir']+'/*.csv')))
+    df_viirs = pd.concat((pd.read_csv(f, dtype={'acq_time': 'str'}) for f in glob(cfg['fire_dir']+'/*.csv')))
 
     # get lightning dots during the several hours before the mean overpass time
-    df_lightning['timestamp'] =  pd.to_datetime(df_lightning['timestamp'], utc=True)
+    df_lightning['timestamp'] = pd.to_datetime(df_lightning['timestamp'], utc=True)
     delta = df_lightning['timestamp'] - t_overpass
     df_lightning['delta'] = delta.dt.total_seconds()/60
-    subset = (-cfg['delta_time'] < df_lightning['delta'])& (df_lightning['delta'] < 0)
+    subset = (-cfg['delta_time'] < df_lightning['delta']) & (df_lightning['delta'] < 0)
     df_lightning = df_lightning[subset]
 
     df_viirs['time'] = pd.to_datetime(df_viirs['acq_date'] + ' ' + df_viirs['acq_time'], utc=True)
     delta = df_viirs['time'] - t_overpass
     df_viirs['delta'] = delta.dt.total_seconds()/60
-    subset = (-cfg['delta_time'] < df_viirs['delta'])& (df_viirs['delta'] < 0)
+    subset = (-cfg['delta_time'] < df_viirs['delta']) & (df_viirs['delta'] < 0)
     df_viirs = df_viirs[subset]
 
     return df_lightning, df_viirs
@@ -122,7 +117,7 @@ def load_lightning_fire(scn, t_overpass, cfg):#, delta_time):
 
 def get_cluster(df_lightning):
     '''Get the cluster of lightning points
-    
+
     Ref: https://geoffboeing.com/2014/08/clustering-to-reduce-spatial-data-set-size/
 
     '''
@@ -131,7 +126,7 @@ def get_cluster(df_lightning):
 
     # search for 40km around each lightning dots
     epsilon = 40/kms_per_radian
-    logging.info(' '*4 + f'Cluster lightning by DBSCAN ...')
+    logging.info(' '*4 + 'Cluster lightning by DBSCAN ...')
     db = DBSCAN(eps=epsilon, min_samples=2, algorithm='ball_tree', metric='haversine').fit(np.radians(coords))
     cluster_labels = db.labels_
 
@@ -155,7 +150,7 @@ def get_cluster(df_lightning):
     hulls = []
 
     for label in cluster_labels:
-        dfq = df_cluster[df_cluster['label']==label]
+        dfq = df_cluster[df_cluster['label'] == label]
         Y = np.array(dfq[['longitude', 'latitude']])
         hull = ConvexHull(Y)
         hulls.append(hull)
@@ -168,7 +163,7 @@ def get_cluster(df_lightning):
 def classify_lightning(df_cluster, df_viirs, cluster_labels, hulls):
     '''Drop lightning cluster where fire is inside'''
     # https://stackoverflow.com/questions/49298505/find-polygons-that-contain-at-least-one-of-a-list-of-points-in-python
-    logging.info(' '*4 + f'Clean lightning ...')
+    logging.info(' '*4 + 'Clean lightning ...')
     polys = gpd.GeoSeries([MultiPoint(hull.tolist()).convex_hull for hull in hulls])
     points = gpd.GeoSeries(df_viirs[['longitude', 'latitude']].apply(Point, axis=1).values)
     masks = polys.apply(lambda x: ~points.within(x).any()).values
@@ -211,7 +206,7 @@ def pred_cluster(df_cluster, t_overpass, ds_era5, wind_levels, cfg):
         chunk_df = np.array_split(df_cluster.reset_index(drop=True), np.arange(0, len(df_cluster), 100))
         with Pool(max_workers=int(cfg['num_cpus'])) as pool:
             pred_lons, pred_lats = zip(*pool.map(functools.partial(pred_cluster_chunk, t_overpass=t_overpass,
-                                                                    ds_era5=ds_era5, level=level),
+                                                                   ds_era5=ds_era5, level=level),
                                                  chunk_df))
             pred_lons = sum([*pred_lons], [])
             pred_lats = sum([*pred_lats], [])
@@ -221,15 +216,16 @@ def pred_cluster(df_cluster, t_overpass, ds_era5, wind_levels, cfg):
 
     return df_cluster
 
+
 def pred_cluster_chunk(df, t_overpass, ds_era5, level):
     lons, lats = [], []
 
     for _, row in df.iterrows():
         times = np.concatenate(([row.time.to_pydatetime().replace(tzinfo=None)],
-                            pd.date_range(row.time.ceil('h').replace(tzinfo=None),
-                                            t_overpass.floor('h').replace(tzinfo=None), freq='H').to_pydatetime(),
-                            [t_overpass.replace(tzinfo=None).to_pydatetime()]
-        ))
+                                pd.date_range(row.time.ceil('h').replace(tzinfo=None),
+                                t_overpass.floor('h').replace(tzinfo=None), freq='H').to_pydatetime(),
+                                [t_overpass.replace(tzinfo=None).to_pydatetime()]
+                                ))
 
         delta_wind = [t.total_seconds() for t in np.diff(times)]
 
@@ -244,10 +240,10 @@ def pred_cluster_chunk(df, t_overpass, ds_era5, level):
                 continue
 
             data['wspd'] = mpcalc.wind_speed(data['u'] * units.meters / units.second,
-                                            data['v'] * units.meters / units.second).rename('wspd')
+                                             data['v'] * units.meters / units.second).rename('wspd')
             data['wdir'] = mpcalc.wind_direction(data['u'] * units.meters / units.second,
-                                                    data['v'] * units.meters / units.second,
-                                                    convention='to').rename('wdir')
+                                                 data['v'] * units.meters / units.second,
+                                                 convention='to').rename('wdir')
 
             # # https://stackoverflow.com/a/40645383/7347925
             # # validation website: https://www.fcc.gov/media/radio/find-terminal-coordinates
@@ -259,7 +255,7 @@ def pred_cluster_chunk(df, t_overpass, ds_era5, level):
 
             # manual method works well with pandarallel
             lon, lat = predict_loc(lon, lat, data['wdir'].metpy.dequantify(),
-                                data['wspd'].metpy.dequantify(), delta_wind[t_index])
+                                   data['wspd'].metpy.dequantify(), delta_wind[t_index])
         lons.append(lon)
         lats.append(lat)
 
@@ -268,13 +264,13 @@ def pred_cluster_chunk(df, t_overpass, ds_era5, level):
 
 def segmentation(scn, min_threshold=4e14, max_threshold=1e15, step_threshold=2e14):
     '''Segmentation the NO2 field by tobac
-    
+
     Tobac: https://gmd.copernicus.org/articles/12/4551/2019/
 
     '''
-    logging.info(' '*4 + f'Segmentation of NO2 ...')
+    logging.info(' '*4 + 'Segmentation of NO2 ...')
     # get the finite no2 data
-    no2_finite = get_finite_scn(scn) # unit: molec./cm2
+    no2_finite = get_finite_scn(scn)  # unit: molec./cm2
 
     # Detect the features and get the masks using tobac
     masks_scn = feature_mask(no2_finite, min_threshold=min_threshold,
@@ -285,7 +281,7 @@ def segmentation(scn, min_threshold=4e14, max_threshold=1e15, step_threshold=2e1
 
 def lightning_mask(scn, clean_cluster, polluted_cluster):
     '''Create NO2 mask (0: no lightning, 1: lightning with fire, >=2: clean lightning with detected high NO2 ) '''
-    logging.info(' '*4 + f'Creating lightning mask ...')
+    logging.info(' '*4 + 'Creating lightning mask ...')
 
     # initialize the masks
     clean_lightning_mask = xr.full_like(scn['nitrogendioxide_tropospheric_column'], 0, dtype=int).load().copy()
@@ -311,14 +307,14 @@ def segmentation_mask(scn, masks_scn):
     Note that these masks are detected by tobac and don't represent the correct lightning NO2 region.
     So, it is better to use the `lightning_label` stored in `clean_cluster` and `polluted cluster`.
     '''
-    logging.info(' '*4 + f'Creating clean LNO2 segmentation mask ...')
+    logging.info(' '*4 + 'Creating clean LNO2 segmentation mask ...')
 
     # create the mask filled with -1
     #   x and y are only used to assign values
     no2_segmentation = xr.full_like(scn['nitrogendioxide_tropospheric_column'], 0, dtype=int)\
-                  .assign_coords({'y': range(len(scn['nitrogendioxide_tropospheric_column'].y)),
-                                  'x': range(len(scn['nitrogendioxide_tropospheric_column'].x))
-                                  }).copy()
+                         .assign_coords({'y': range(len(scn['nitrogendioxide_tropospheric_column'].y)),
+                                         'x': range(len(scn['nitrogendioxide_tropospheric_column'].x))
+                                         }).copy()
 
     no2_segmentation.load()
     no2_segmentation.loc[dict(y=masks_scn.coords['y'], x=masks_scn.coords['x'])] = masks_scn
@@ -333,9 +329,9 @@ def segmentation_mask(scn, masks_scn):
     return no2_segmentation.rename('nitrogendioxide_segmentation')
 
 
-def save_data(scn, vnames, cfg, output_file, lightning_mask, df_viirs=None, clean_cluster=None, no2_segmentation=None):
+def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None, clean_cluster=None, no2_segmentation=None):
     '''Saving all data
-    
+
     1) lightning data (1D, coord: lightning_label)
         time, longitude, latitude, delta, wdir,
         wspd, longitude_pred, latitude_pred
@@ -346,13 +342,22 @@ def save_data(scn, vnames, cfg, output_file, lightning_mask, df_viirs=None, clea
     3) TROPOMI L2 subset data with no2_label (2D, coord:[y, x])
 
     '''
-    # save loaded s5p data
+    # get the saving path
+    output_file = os.path.join(savedir,
+                               os.path.basename(filename)[20:26],
+                               os.path.basename(filename)[:-19]+'.nc'
+                               )
+
+    # create the dir if not existed
+    if not os.path.isdir(savedir+os.path.basename(filename)[20:26]):
+        os.makedirs(savedir+os.path.basename(filename)[20:26])
+
     logging.info(' '*4 + f'Saving to {output_file}')
 
     if no2_segmentation is None:
         s5p_vnames = vnames + ['lightning_mask']
     else:
-        s5p_vnames = vnames +['lightning_mask', 'nitrogendioxide_segmentation']
+        s5p_vnames = vnames + ['lightning_mask', 'nitrogendioxide_segmentation']
         scn['nitrogendioxide_segmentation'] = no2_segmentation
 
     scn['lightning_mask'] = lightning_mask
@@ -390,10 +395,10 @@ def save_data(scn, vnames, cfg, output_file, lightning_mask, df_viirs=None, clea
         clean_cluster.attrs['description'] = f"Clean lighting point data grouped by lightning_label, {cfg['delta_time']} minutes before TROPOMI overpass"
 
         clean_cluster.to_netcdf(path=output_file,
-                                  group='Lightning',
-                                  engine='netcdf4',
-                                  encoding=enc,
-                                  mode='a')
+                                group='Lightning',
+                                engine='netcdf4',
+                                encoding=enc,
+                                mode='a')
 
     if df_viirs is not None:
         # subset fire DataFrame to Dataset

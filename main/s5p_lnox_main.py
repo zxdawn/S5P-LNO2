@@ -20,18 +20,15 @@ UPDATE:
        19/12/2021: Export masks (lightning_mask and nitrogendioxide_segmentation) instead of overlapped lightning
 '''
 
-import concurrent
 import functools
 import logging
 import os
-import shutil
-import warnings
 from concurrent.futures import ProcessPoolExecutor as Pool
-from functools import partial
 from warnings import filterwarnings
 
+import numpy as np
 import pandas as pd
-
+import xarray as xr
 from s5p_lnox_utils import *
 
 filterwarnings("ignore")
@@ -40,6 +37,7 @@ logging.basicConfig(level=logging.INFO)
 # logging.basicConfig(level=logging.DEBUG)
 logging.getLogger('satpy').setLevel(logging.ERROR)
 
+
 def process_data(filename, cfg):
     '''Process data and save data related to LNO2'''
     # generate the output filename
@@ -47,7 +45,6 @@ def process_data(filename, cfg):
                                os.path.basename(filename)[20:26],
                                os.path.basename(filename)[:-19]+'.nc'
                                )
-
 
     # skip if the file exists
     if os.path.isfile(output_file) and not cfg.get('overwrite', 'True') == 'True':
@@ -66,16 +63,12 @@ def process_data(filename, cfg):
 
     if df_lightning.empty:
         logging.info(' '*4+f'No lightning flashes are found for {os.path.basename(filename)}')
-        save_data(scn, vnames, cfg, output_file, mask)
-        return
     else:
         # cluster lightning data
         df_cluster, cluster_labels, hulls = get_cluster(df_lightning)
 
         if df_cluster.empty:
-            save_data(scn, vnames, cfg, output_file, mask)
             logging.info(' '*4+f'No lightning clusters are found for {os.path.basename(filename)}')
-            return
         else:
             # classify lightning clusters into clean and polluted (fire) categories
             clean_cluster, polluted_cluster = classify_lightning(df_cluster, df_viirs, cluster_labels, hulls)
@@ -106,20 +99,14 @@ def process_data(filename, cfg):
                 no2_segmentation = segmentation_mask(scn, masks_scn)
 
                 # export datasets to NetCDF file
-                save_data(scn, vnames, cfg, output_file, mask, df_viirs, clean_cluster, no2_segmentation)
-
-                # check another directory for copying data which have clean lightning
-                if not os.path.isdir(clean_dir+os.path.basename(filename)[20:26]):
-                    os.makedirs(clean_dir+os.path.basename(filename)[20:26])
-
-                # copy NetCDF file to another directory which only saves clean lightning cases
-                #     this can make the analysis of clean LNO2 more quickly
-                shutil.copy(output_file, os.path.join(clean_dir, os.path.basename(filename)[20:26]))
-
+                save_data(clean_dir, filename, scn, vnames, cfg, mask, df_viirs, clean_cluster, no2_segmentation)
             else:
-                no2_segmentation = None
-                # export datasets to NetCDF file
-                save_data(scn, vnames, cfg, output_file, mask, df_viirs, clean_cluster, no2_segmentation)
+                # in case users want to use fire polluted data, the dataset is exported instead of saving the empty one
+                #   Note taht the lightning_mask contains the fire mask, we don't need to save extra polluted cluster
+                save_data(fire_dir, filename, scn, vnames, cfg, mask, df_viirs)
+
+    # create empty netcdf to skip data processing if `overwrite==False`
+    xr.Dataset().to_netcdf(output_file)
 
 
 def main():
@@ -144,6 +131,7 @@ if __name__ == '__main__':
 
     overwrite = cfg.get('overwrite', 'True') == 'True'
     clean_dir = cfg['output_data_dir'] + '/clean_lightning/'  # directory to only save clean lightning cases
+    fire_dir = cfg['output_data_dir'] + '/fire_lightning/'  # directory to only save fire lightning cases
     wind_levels = np.arange(700, 250, -50)  # pressure levels used to calculate the location of transported LNO2 air parcel
 
     # generate data range

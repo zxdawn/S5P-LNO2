@@ -6,27 +6,23 @@ UPDATE:
        05/12/2021: Basic
 '''
 
-import functools
 import logging
 import os
 import warnings
-from concurrent.futures import ProcessPoolExecutor as Pool
 from datetime import timedelta
 from glob import glob
 from itertools import compress
 
 import geopandas as gpd
-import metpy.calc as mpcalc
 import numpy as np
 import pandas as pd
 import xarray as xr
-# from geopy.distance import geodesic
-from metpy.units import units
 from s5p_lnox_functions import *
 from satpy import Scene
 from scipy.spatial import ConvexHull
 from shapely.geometry import MultiPoint, Point
 from sklearn.cluster import DBSCAN
+from pandarallel import pandarallel
 
 warnings.filterwarnings('ignore')
 
@@ -213,79 +209,30 @@ def pred_cluster(df_cluster, t_overpass, ds_era5, wind_levels, cfg):
 
     Note that the source of high NO2 could originate frome different pressure levels.
     So, we checked chose 700 hPa ~ 300 hPa for prediction.
-
-    Because `parallel_apply` sometimes raise "can't locate memory" error.
-        we split the cluster into chunks whose row number is <= 100 and apply pool map manually
-    Ref:    https://stackoverflow.com/a/41447373
-            https://stackoverflow.com/a/44729807
-    If you have large memory, you can delete the loop in `pred_cluster_chunk()` and use `parallel_apply()`:
-        `for level in wind_levels:
-            clean_cluster.parallel_apply(pred_cluster_chunk, axis=1, args=(t_overpass, ds_era5, level))`
-    Ofc, `dask` is another option which needs tricky settings of chunk size.
-    Ref:    https://stackoverflow.com/a/37979876
-            https://gdcoder.com/speed-up-pandas-apply-function-using-dask-or-swifter-tutorial/
-    Let's stick to the manual chunk by `np.array_split()` at this stage.
-
-    If someone figure out how to vectorise the process, please feel free to PR.
     '''
-    for level in wind_levels:
-        chunk_df = np.array_split(df_cluster.reset_index(drop=True), np.arange(0, len(df_cluster), 100))
-        with Pool(max_workers=int(cfg['num_cpus'])) as pool:
-            pred_lons, pred_lats = zip(*pool.map(functools.partial(pred_cluster_chunk, t_overpass=t_overpass,
-                                                                   ds_era5=ds_era5, level=level),
-                                                 chunk_df))
-            pred_lons = sum([*pred_lons], [])
-            pred_lats = sum([*pred_lats], [])
+    # it's better to make sure the size of each chunk is <= 500
+    pandarallel.initialize(nb_workers=df_cluster.shape[0]//500, progress_bar=True)
 
-        df_cluster[f'longitude_pred_{level}'] = pred_lons
-        df_cluster[f'latitude_pred_{level}'] = pred_lats
+    # convert DataArray to numpy array for scipy.interpolate.interpn
+    #   the order should be time, lat, and lon
+    #   because the dim of era5 variables is (time, level, latitude, longitude)
+    coords = [ds_era5.time.astype(float).values, ds_era5.latitude.values, ds_era5.longitude.values]
+
+    # get time steps  between flash time and TROPOMI overpass time
+    df_cluster['time_step'] = df_cluster.apply(lambda row: get_delta_time(row['time'], t_overpass), axis=1)
+
+    for level in wind_levels:
+        # get the wind at the pressure level
+        u = ds_era5['u'].sel(level=level).values
+        v = ds_era5['v'].sel(level=level).values
+
+        # using the wind info to predict the location at the TROPOMI overpass time
+        df_cluster = df_cluster.parallel_apply(lambda row: predict_loc(row, level, coords, u, v), axis=1)
+
+    # remove useless columns
+    df_cluster.drop(['time_step'], axis=1, inplace=True)
 
     return df_cluster
-
-
-def pred_cluster_chunk(df, t_overpass, ds_era5, level):
-    lons, lats = [], []
-
-    for _, row in df.iterrows():
-        times = np.concatenate(([row.time.to_pydatetime().replace(tzinfo=None)],
-                                pd.date_range(row.time.ceil('h').replace(tzinfo=None),
-                                t_overpass.floor('h').replace(tzinfo=None), freq='H').to_pydatetime(),
-                                [t_overpass.replace(tzinfo=None).to_pydatetime()]
-                                ))
-
-        delta_wind = [t.total_seconds() for t in np.diff(times)]
-
-        lat, lon = row.latitude, row.longitude
-
-        for t_index, time in enumerate(times[:-1]):
-            data = ds_era5.interp(time=time, longitude=lon, latitude=lat, level=level)
-
-            # if there's nan value then just skip it.
-            # This situation sometimes happen at the high level (> 250 hPa)
-            if np.isnan(data['u']) or np.isnan(data['v']):
-                continue
-
-            data['wspd'] = mpcalc.wind_speed(data['u'] * units.meters / units.second,
-                                             data['v'] * units.meters / units.second).rename('wspd')
-            data['wdir'] = mpcalc.wind_direction(data['u'] * units.meters / units.second,
-                                                 data['v'] * units.meters / units.second,
-                                                 convention='to').rename('wdir')
-
-            # # https://stackoverflow.com/a/40645383/7347925
-            # # validation website: https://www.fcc.gov/media/radio/find-terminal-coordinates
-            # # this method has issue with pandarallel
-            # dest = geodesic(kilometers=(data['wspd']*delta_wind[t_index]/1e3).metpy.dequantify())\
-            #                 .destination(geopy.Point(lat, lon), data['wdir'].metpy.dequantify())
-            # lat = dest[0]
-            # lon = dest[1]
-
-            # manual method works well with pandarallel
-            lon, lat = predict_loc(lon, lat, data['wdir'].metpy.dequantify(),
-                                   data['wspd'].metpy.dequantify(), delta_wind[t_index])
-        lons.append(lon)
-        lats.append(lat)
-
-    return lons, lats
 
 
 def segmentation(scn, min_threshold=4e14, max_threshold=1e15, step_threshold=2e14):
@@ -396,7 +343,7 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
     # set compression
     comp = dict(zlib=True, complevel=7)
 
-    logging.info(' '*8 + f'Saving S5P products ...')
+    logging.info(' '*8 + 'Saving S5P products ...')
     scn.save_datasets(filename=output_file,
                       datasets=s5p_vnames,
                       groups={'S5P': s5p_vnames},
@@ -421,7 +368,7 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
         enc = {var: comp for var in clean_cluster.data_vars}
         clean_cluster.attrs['description'] = f"Clean lighting point data grouped by lightning_label, {cfg['delta_time']} minutes before TROPOMI overpass"
 
-        logging.info(' '*8 + f'Saving clustered clean lightning ...')
+        logging.info(' '*8 + 'Saving clustered clean lightning ...')
         clean_cluster.to_netcdf(path=output_file,
                                 group='Lightning',
                                 engine='netcdf4',
@@ -439,7 +386,7 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
         enc = {var: comp for var in ds_viirs.data_vars}
         ds_viirs.attrs['description'] = f"SNPP/VIIRS fire point data, {cfg['delta_time']} minutes before TROPOMI overpass"
 
-        logging.info(' '*8 + f'Saving Fire products ...')
+        logging.info(' '*8 + 'Saving Fire products ...')
         ds_viirs.to_netcdf(path=output_file,
                            group='Fire',
                            engine='netcdf4',

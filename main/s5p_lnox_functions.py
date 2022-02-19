@@ -4,12 +4,16 @@ import os
 from configparser import SafeConfigParser
 from datetime import datetime
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 import tobac
 import xarray as xr
 from scipy.spatial import ConvexHull
+import metpy.calc as mpcalc
+from metpy.units import units
+import geopy
+from geopy.distance import geodesic
+from scipy.interpolate import interpn
 
 
 class Config(dict):
@@ -188,23 +192,87 @@ def feature_mask(no2_finite, min_threshold=4e14, max_threshold=1e15, step_thresh
         return None
 
 
-# def predict_loc(data, lon, lat):
-def predict_loc(lon, lat, wdir, wspd, wdelta):
-    # https://stackoverflow.com/a/7835325/7347925
-    lon, lat = np.deg2rad(lon), np.deg2rad(lat)
-    R = 6378.1  # Radius of the Earth
-    brng = np.deg2rad(wdir)  # Bearing is radians.
-    d = wspd*wdelta/1e3  # Distance in km
+def get_delta_time(begin_time, end_time):
+    # because the ds is hourly data, we need to create the hourly time step
+    times = np.concatenate(([begin_time.to_pydatetime().replace(tzinfo=None)],
+                            pd.date_range(begin_time.ceil('h').replace(tzinfo=None),
+                            end_time.floor('h').replace(tzinfo=None), freq='H').to_pydatetime(),
+                            [end_time.replace(tzinfo=None).to_pydatetime()]
+                            ))
 
-    lat2 = math.asin(math.sin(lat)*math.cos(d/R) + math.cos(lat)*math.sin(d/R)*math.cos(brng))
+    # calculate the time delta (seconds)
+    time_step = [t.total_seconds() for t in np.diff(times)]
 
-    lon2 = lon + math.atan2(math.sin(brng)*math.sin(d/R)*math.cos(lat),
-                            math.cos(d/R)-math.sin(lat)*math.sin(lat2))
+    return time_step
 
-    lat2 = np.rad2deg(lat2)
-    lon2 = np.rad2deg(lon2)
 
-    return lon2, lat2
+def calc_wind(row, coords, u, v, time_pred, lon_column, lat_column):
+    '''Calculate the wspd and wdir'''
+    # interpolate the u and v fields
+    interp_points = [xr.DataArray(time_pred).astype('float').values, row[lat_column], row[lon_column]]
+    u_interp = interpn(coords, u, interp_points)
+    v_interp = interpn(coords, v, interp_points)
+
+    # wind speed (m/s)
+    wspd = mpcalc.wind_speed(u_interp * units.meters / units.second,
+                             v_interp * units.meters / units.second).magnitude
+
+    # wind direction (degree)
+    wdir = mpcalc.wind_direction(u_interp * units.meters / units.second,
+                                 v_interp * units.meters / units.second,
+                                 convention='to').magnitude
+
+    return wspd, wdir
+
+
+def predict_loc(row, level, coords, u, v):
+    '''Predict the location using wind data'''
+    # set the column names for saving predicted location
+    lon_column = f'longitude_pred_{level}'
+    lat_column = f'latitude_pred_{level}'
+
+    # copy the initial location
+    row[lon_column] = row['longitude']
+    row[lat_column] = row['latitude']
+    time_pred = row['time']
+
+    for delta in row['time_step']:
+        # interpolate the wind info from era5
+        wspd, wdir = calc_wind(row, coords, u, v, time_pred, lon_column, lat_column)
+
+        # predict the location at next time
+        # https://stackoverflow.com/a/40645383/7347925
+        # validation website: https://www.fcc.gov/media/radio/find-terminal-coordinates
+        # this method has issue with pandarallel
+        dest = geodesic(kilometers=(wspd*delta/1e3))\
+            .destination(geopy.Point(row[lat_column], row[lon_column]), wdir)
+        lat2 = dest[0]
+        lon2 = dest[1]
+
+        # save the predicted location
+        row[lon_column] = lon2
+        row[lat_column] = lat2
+
+        # update time to the next step
+        time_pred = time_pred + pd.Timedelta(seconds=delta)
+
+        # # --- bak up: method without geopy ---
+        # # https://stackoverflow.com/a/7835325/7347925
+        # lon, lat = np.deg2rad(row[lon_column]), np.deg2rad(row[lat_column])
+
+        # brng = np.deg2rad(wdir)  # Bearing is radians.
+        # d = wspd*delta/1e3  # Distance in km
+        # R = 6378.1  # Radius of the Earth
+
+        # lat2 = math.asin(math.sin(lat)*math.cos(d/R) + math.cos(lat)*math.sin(d/R)*math.cos(brng))
+
+        # lon2 = lon + math.atan2(math.sin(brng)*math.sin(d/R)*math.cos(lat),
+        #            math.cos(d/R)-math.sin(lat)*math.sin(lat2))
+
+        # lat2 = np.rad2deg(lat2)
+        # lon2 = np.rad2deg(lon2)
+
+    return row
 
 
 def in_hull(p, hull):

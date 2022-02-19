@@ -45,6 +45,7 @@ def process_data(filename, cfg):
                                os.path.basename(filename)[20:26],
                                os.path.basename(filename)[:-19]+'.nc'
                                )
+    basename = os.path.basename(filename)
 
     # whether continue processing data
     if not check_log(cfg, basename):
@@ -113,7 +114,7 @@ def main():
     pattern = os.path.join(cfg['s5p_dir'], '{}{:02}', 'S5P_*_L2__NO2____{}{:02}{:02}T*')
     filelist = sum([glob(pattern.format(date.year, date.month, date.year, date.month, date.day)) for date in req_dates], [])
 
-    with Pool(max_workers=int(cfg['num_cpus'])) as pool:
+    with Pool(max_workers=int(cfg['num_pool'])) as pool:
         # data process in parallel
         # we don't use multiprocessing.Pool because it's non-daemonic
         #  https://stackoverflow.com/a/61470465/7347925
@@ -131,7 +132,7 @@ if __name__ == '__main__':
     overwrite = cfg.get('overwrite', 'True') == 'True'
     clean_dir = cfg['output_data_dir'] + '/clean_lightning/'  # directory to only save clean lightning cases
     fire_dir = cfg['output_data_dir'] + '/fire_lightning/'  # directory to only save fire lightning cases
-    wind_levels = np.arange(700, 250, -50)  # pressure levels used to calculate the location of transported LNO2 air parcel
+    wind_levels = np.arange(700, 100, -200)  # pressure levels used to calculate the location of transported LNO2 air parcel
 
     # generate data range
     req_dates = pd.date_range(start=cfg['start_date'],

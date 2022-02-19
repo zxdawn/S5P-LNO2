@@ -101,6 +101,8 @@ def load_s5p_era5(f_s5p, cfg):
     ds_era5 = xr.open_dataset(os.path.join(cfg['era5_dir'],
                               f"era5_{scn['nitrogendioxide_tropospheric_column'].time.dt.strftime('%Y%m').values}.nc")
                               )
+    # sort the Dataset with ascending lat
+    ds_era5 = ds_era5.loc[{'latitude':sorted(ds_era5.coords['latitude'])}]
 
     return scn, vnames, t_overpass, ds_era5
 
@@ -110,7 +112,7 @@ def load_lightning_fire(scn, t_overpass, cfg):
     # get lightning data on overpass day and one day before
     day_now = scn.attrs['end_time']
     day_pre = scn.attrs['end_time']-timedelta(days=1)
-    lightning_list = [day.strftime(f"{cfg['lightning_dir']}/%Y%m/xin_Arctic_pulse%Y%m%d.csv") for day in [day_pre, day_now]]
+    lightning_list = [day.strftime(f"{cfg['lightning_dir']}/%Y%m/%Y%m%d.csv") for day in [day_pre, day_now]]
     # drop not existed filename
     lightning_list = [filename for filename in lightning_list if os.path.exists(filename)]
 
@@ -155,8 +157,6 @@ def get_cluster(df_lightning):
     df_cluster = pd.DataFrame({'time': df_lightning['timestamp'].values,
                                'longitude': df_lightning['longitude'].values,
                                'latitude': df_lightning['latitude'].values,
-                               'type': df_lightning['type'].values,
-                               'peakcurrent': df_lightning['peakcurrent'].values,
                                'delta': df_lightning['delta'].values,
                                'label': cluster_labels})
 

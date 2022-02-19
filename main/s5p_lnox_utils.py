@@ -210,7 +210,7 @@ def pred_cluster(df_cluster, t_overpass, ds_era5, wind_levels, cfg):
     Note that the source of high NO2 could originate frome different pressure levels.
     So, we checked chose 700 hPa ~ 300 hPa for prediction.
     '''
-    pandarallel.initialize(nb_workers=int(cfg['nb_worker']), progress_bar=True)
+    pandarallel.initialize(nb_workers=int(cfg['nb_worker']), progress_bar=False)
 
     # convert DataArray to numpy array for scipy.interpolate.interpn
     #   the order should be time, lat, and lon

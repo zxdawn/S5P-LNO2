@@ -222,8 +222,12 @@ def pred_cluster(df_cluster, t_overpass, ds_era5, wind_levels, cfg):
     df_cluster['time_step'] = df_cluster.apply(lambda row: get_delta_time(row['time'], t_overpass), axis=1)
 
     for level in wind_levels:
+        # get the wind at the pressure level
+        u = ds_era5['u'].sel(level=level).values
+        v = ds_era5['v'].sel(level=level).values
+
         # using the wind info to predict the location at the TROPOMI overpass time
-        df_cluster = df_cluster.parallel_apply(lambda row: predict_loc(row, level, coords, ds_era5), axis=1)
+        df_cluster = df_cluster.parallel_apply(lambda row: predict_loc(row, level, coords, u, v), axis=1)
 
     # remove useless columns
     df_cluster.drop(['time_step'], axis=1, inplace=True)

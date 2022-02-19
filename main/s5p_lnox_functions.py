@@ -225,7 +225,7 @@ def calc_wind(row, coords, u, v, time_pred, lon_column, lat_column):
     return wspd, wdir
 
 
-def predict_loc(row, level, coords, ds_era5):
+def predict_loc(row, level, coords, u, v):
     '''Predict the location using wind data'''
     # set the column names for saving predicted location
     lon_column = f'longitude_pred_{level}'
@@ -235,10 +235,6 @@ def predict_loc(row, level, coords, ds_era5):
     row[lon_column] = row['longitude']
     row[lat_column] = row['latitude']
     time_pred = row['time']
-
-    # get the wind at the pressure level
-    u = ds_era5['u'].sel(level=level).values
-    v = ds_era5['v'].sel(level=level).values
 
     for delta in row['time_step']:
         # interpolate the wind info from era5

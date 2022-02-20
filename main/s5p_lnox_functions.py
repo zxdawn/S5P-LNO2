@@ -308,7 +308,6 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
                              ).T
 
     labels = list(set(ds.lightning_label.values))
-    labels.remove(0)
 
     for index, label in enumerate(labels):
         # iterate each label and update the mask

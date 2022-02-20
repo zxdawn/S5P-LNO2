@@ -268,6 +268,11 @@ def lightning_mask(scn, clean_cluster, polluted_cluster):
         _, polluted_lightning_mask = convert_cluster(scn, polluted_cluster, polluted_lightning_mask, 'polluted')
 
     lightning_mask = clean_lightning_mask + polluted_lightning_mask
+
+    # rename and add new attributes
+    lightning_mask = lightning_mask.rename('lightning_mask')
+    lightning_mask.attrs = ''
+    lightning_mask.attrs['long_name'] = 'lightning mask'
     lightning_mask.attrs['description'] = '<0: labeled lightning with fire; 0: no lightning; >0: labeled lightning without fire'
 
     return lightning_mask, clean_cluster

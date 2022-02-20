@@ -105,9 +105,6 @@ def process_data(filename, cfg):
                 #   Note taht the lightning_mask contains the fire mask, we don't need to save extra polluted cluster
                 save_data(fire_dir, filename, scn, vnames, cfg, mask, df_viirs)
 
-    # create empty netcdf to skip data processing if `overwrite==False`
-    xr.Dataset().to_netcdf(output_file)
-
 
 def main():
     # get all filenames based on requested date range

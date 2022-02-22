@@ -144,7 +144,7 @@ def plot_func(ds_tropomi, ds_lightning):
             ax.contour(lightning_mask.longitude, lightning_mask.latitude, lightning_mask,
                        levels=[1], colors=['red5'])
 
-            ax.format(title='Horizontal transport of lightning tracer')
+            ax.format(title="Horizontal transport of lightning tracer \n Flash Count: {ds_lightning.sizes['lightning_label']}")
 
             ax = axs[7]
             ds_lightning_mask['nitrogendioxide_tropospheric_column'].plot\

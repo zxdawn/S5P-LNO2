@@ -70,14 +70,15 @@ def load_s5p_era5(f_s5p, cfg):
     scn = Scene(f_s5p, reader='tropomi_l2')
 
     vnames = ['time_utc', 'qa_value',
-              'processing_quality_flags', 'geolocation_flags',
+              'processing_quality_flags', 'geolocation_flags', 'snow_ice_flag',
               # 'latitude', 'longitude',
               # 'latitude_bounds', 'longitude_bounds',
               'assembled_lon_bounds', 'assembled_lat_bounds',
               'nitrogendioxide_slant_column_density',
               'nitrogendioxide_tropospheric_column', 'nitrogendioxide_stratospheric_column',
               'nitrogendioxide_total_column', 'nitrogendioxide_ghost_column',
-              'cloud_pressure_crb', 'cloud_radiance_fraction_nitrogendioxide_window',
+              'cloud_pressure_crb', 'cloud_albedo_crb',
+              'cloud_radiance_fraction_nitrogendioxide_window',
               'cloud_fraction_crb_nitrogendioxide_window',
               'air_mass_factor_stratosphere', 'air_mass_factor_troposphere',
               'air_mass_factor_total',

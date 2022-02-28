@@ -89,6 +89,13 @@ def load_s5p_era5(f_s5p, cfg):
               'tm5_constant_a', 'tm5_constant_b', 'tm5_tropopause_layer_index', 'averaging_kernel',
               ]
 
+    # load TM5 variables added by TM5_profile.py, if they exist
+    #   https://dev.knmi.nl/projects/pycama/repository/entry/src/TM5_profile.py
+    if 'no2_vmr' in scn.all_dataset_names():
+        vnames.extend(['no2_vmr'])
+    if 'temperature' in scn.all_dataset_names():
+        vnames.extend(['temperature'])
+
     logging.debug(' '*4 + f'Reading vnames: {vnames}')
     scn.load(vnames)
 

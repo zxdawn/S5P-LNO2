@@ -168,6 +168,13 @@ def get_cluster(df_lightning):
                                'delta': df_lightning['delta'].values,
                                'label': cluster_labels})
 
+    # if the lightning data is density data, which have column name including "count",
+    #   then add the count info to new column
+    boolean_count = df_lightning.columns.str.lower().str.contains('count')
+    if any(boolean_count):
+        count_colname = df_lightning.columns[boolean_count]
+        df_cluster['count'] = df_lightning[count_colname].values.astype('int64')
+
     # drop noise data (-1)
     df_cluster = df_cluster[df_cluster.label != -1]
 
@@ -238,6 +245,11 @@ def pred_cluster(df_cluster, t_overpass, ds_era5, wind_levels, cfg):
 
     # remove useless columns
     df_cluster.drop(['time_step'], axis=1, inplace=True)
+
+    # duplicate the rows if the lightning data is density data, which have the "count" column
+    if 'count' in df_cluster.columns:
+        df_cluster = df_cluster.loc[df_cluster.index.repeat(df_cluster['count'])]
+        del df_cluster['count']
 
     return df_cluster
 

@@ -144,7 +144,8 @@ def plot_func(ds_tropomi, ds_lightning):
             ax.contour(lightning_mask.longitude, lightning_mask.latitude, lightning_mask,
                        levels=[1], colors=['red5'])
 
-            ax.format(title="Horizontal transport of lightning tracer \n Flash Count: {ds_lightning.sizes['lightning_label']}")
+            recent_lightning = (ds_lightning['delta'] > -90).sum().values
+            ax.format(title=f"Horizontal transport of lightning tracer \n Flash Count in 1.5 hour : {recent_lightning}")
 
             ax = axs[7]
             ds_lightning_mask['nitrogendioxide_tropospheric_column'].plot\
@@ -163,6 +164,10 @@ def plot_func(ds_tropomi, ds_lightning):
                                                                           ax=ax
                                                                           )
             ax.format(title='Tracked NO$_2$ VCD')
+
+            # in case the point cross 180E
+            if lon_max - lon_min > 180:
+                lon_min = min([n for n in ds_lightning['longitude'] if n>0]).values
 
             axs.format(xlim=(lon_min, lon_max), ylim=(lat_min, lat_max),
                        suptitle=ds_tropomi.s5p_filename,

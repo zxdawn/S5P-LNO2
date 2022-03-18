@@ -362,6 +362,8 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
 
     # set group attributes
     group_attrs = {'s5p_filename': scn.attrs['s5p_filename'],
+                   'time_coverage_start': scn['nitrogendioxide_tropospheric_column'].attrs['time_coverage_start'],
+                   'time_coverage_end': scn['nitrogendioxide_tropospheric_column'].attrs['time_coverage_end'],
                    'description': 'Subset of official TROPOMI L2 data'
                    }
 

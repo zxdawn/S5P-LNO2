@@ -118,8 +118,9 @@ def load_s5p_era5(f_s5p, cfg):
 def load_lightning_fire(scn, t_overpass, cfg):
     '''Read lightning and fire data related to the S5P NO2 Scene'''
     # get lightning data on overpass day and one day before
-    day_now = scn.attrs['end_time']
-    day_pre = scn.attrs['end_time']-timedelta(days=1)
+    day_now = scn['nitrogendioxide_tropospheric_column'].attrs['end_time']
+    day_pre = day_now-timedelta(days=1)
+
     lightning_list = [day.strftime(f"{cfg['lightning_dir']}/%Y%m/%Y%m%d.csv") for day in [day_pre, day_now]]
     # drop not existed filename
     lightning_list = [filename for filename in lightning_list if os.path.exists(filename)]

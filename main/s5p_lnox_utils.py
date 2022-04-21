@@ -17,12 +17,14 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import xarray as xr
-from s5p_lnox_functions import *
+from dateutil.relativedelta import relativedelta
+from pandarallel import pandarallel
 from satpy import Scene
 from scipy.spatial import ConvexHull
 from shapely.geometry import MultiPoint, Point
 from sklearn.cluster import DBSCAN
-from pandarallel import pandarallel
+
+from s5p_lnox_functions import *
 
 warnings.filterwarnings('ignore')
 
@@ -106,9 +108,13 @@ def load_s5p_era5(f_s5p, cfg):
     scn.attrs['s5p_filename'] = os.path.basename(f_s5p[0])
 
     # read hourly era5 data
-    ds_era5 = xr.open_dataset(os.path.join(cfg['era5_dir'],
-                              f"era5_{scn['nitrogendioxide_tropospheric_column'].time.dt.strftime('%Y%m').values}.nc")
-                              )
+    #   we need to read two months' data in case of lightning happened before the first day of month
+    era5_date = scn['nitrogendioxide_tropospheric_column'].time.dt.strftime('%Y%m').values
+    era5_file1 = os.path.join(cfg['era5_dir'], f"era5_{era5_date}.nc")
+    pre_date = scn['nitrogendioxide_tropospheric_column'].time.dt.date-relativedelta(months=1)
+    era5_file2 = os.path.join(cfg['era5_dir'], f"era5_{str(pre_date.values)[:7].replace('-','')}.nc")
+    ds_era5 = xr.open_mfdataset([era5_file1, era5_file2])
+
     # sort the Dataset with ascending lat
     ds_era5 = ds_era5.loc[{'latitude':sorted(ds_era5.coords['latitude'])}]
 

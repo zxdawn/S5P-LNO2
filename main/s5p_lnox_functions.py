@@ -4,16 +4,18 @@ import os
 from configparser import SafeConfigParser
 from datetime import datetime
 
+import geopy
+import metpy.calc as mpcalc
 import numpy as np
 import pandas as pd
 import tobac
 import xarray as xr
-from scipy.spatial import ConvexHull
-import metpy.calc as mpcalc
-from metpy.units import units
-import geopy
 from geopy.distance import geodesic
+from metpy.units import units
+from pyresample import kd_tree
+from pyresample.geometry import SwathDefinition
 from scipy.interpolate import interpn
+from scipy.spatial import ConvexHull
 
 
 class Config(dict):
@@ -293,12 +295,31 @@ def in_hull(p, hull):
     return hull.find_simplex(p) >= 0
 
 
+def mask_label(scn, ds, lightning_mask):
+    '''Generate the lightning label based on mask value'''
+    # define the swaths
+    swath_tropomi = SwathDefinition(lons=scn['nitrogendioxide_tropospheric_column'].longitude,
+                                    lats=scn['nitrogendioxide_tropospheric_column'].latitude)
+    swath_lightning = SwathDefinition(lons=ds['longitude_pred'].isel(level=0),
+                                      lats=ds['latitude_pred'].isel(level=0))
+
+    # assign the mask value as lightning label using the nearest resample
+    lightning_label = kd_tree.resample_nearest(swath_tropomi, lightning_mask,
+                                               swath_lightning, radius_of_influence=10000, epsilon=0.5)
+    ds['lightning_label'] = lightning_label
+
+    # use the lightning label as the dims
+    ds = ds.swap_dims({'cluster_label': 'lightning_label'})
+
+    return ds
+
+
 def convert_cluster(scn, df, lightning_mask, kind='clean'):
     '''Convert the lightning cluster DataFrame to Dataset which has the same shape of NO2'''
     # rename the label
-    df = df.rename(columns={'label': 'lightning_label'})
+    df = df.rename(columns={'label': 'cluster_label'})
     # set label as index which is the coordinate of xarray Dataset
-    df.set_index(['lightning_label'], inplace=True)
+    df.set_index(['cluster_label'], inplace=True)
     # convert to Dataset
     ds = concat_pred(df.to_xarray())
 
@@ -307,20 +328,23 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
                               scn['nitrogendioxide_tropospheric_column'].latitude.stack(z=('x', 'y')))
                              ).T
 
-    labels = list(set(ds.lightning_label.values))
+    labels = list(set(ds.cluster_label.values))
 
     for index, label in enumerate(labels):
         # iterate each label and update the mask
-        dfq = ds.sel(lightning_label=label)
-        lon_lat = dfq[['longitude_pred', 'latitude_pred']].stack(all=("level", "lightning_label"))
+        dfq = ds.sel(cluster_label=label)
+        # we use the lightning prediction over different pressure levels to create mask
+        lon_lat = dfq[['longitude_pred', 'latitude_pred']].stack(all=("level", "cluster_label"))
         lightning_points = lon_lat.to_array().transpose('all', ...)
 
+        # get the mask where predicted lightning is inside
         mask = in_hull(pixel_points, lightning_points).reshape(scn['nitrogendioxide_tropospheric_column'].shape, order='F')
 
-        # get the overplapped label
+        # get the overplapped DBSCAN label
         overlapped_label = np.delete(np.unique(lightning_mask.where(xr.DataArray(mask, dims=['y', 'x']), 0)), 0)
 
         if len(overlapped_label) == 0:
+            # no overlapped labels mean that only one DBSCAN cluster is inside
             if kind == 'clean':
                 # clean lightning 1abel: 1, 2, ....
                 lightning_mask = xr.where(mask, index+1, lightning_mask)
@@ -328,12 +352,10 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
                 # polluted lightning 1abel: -1, -2, ....
                 lightning_mask = xr.where(mask, -index-1, lightning_mask)
         elif len(overlapped_label) == 1:
-            # set to the only overlapped value
-            if kind == 'clean':
-                lightning_mask = xr.where(mask, overlapped_label[0], lightning_mask)
-            elif kind == 'polluted':
-                lightning_mask = xr.where(mask, overlapped_label[0], lightning_mask)
+            # set the mask value to the overlapped value
+            lightning_mask = xr.where(mask, overlapped_label[0], lightning_mask)
         else:
+            # this condition indicates there're >=2 DBSCAN clusters
             # get the minimum label
             min_label = np.min(overlapped_label)
             # set the mask where lightning happens to minimum label
@@ -341,6 +363,9 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
             # update overlapped masks with minimum min label
             for rest_label in np.delete(overlapped_label, np.where(overlapped_label == min_label)):
                 lightning_mask = lightning_mask.where(lightning_mask != rest_label, min_label)
+
+    # generate label based on mask values
+    ds = mask_label(scn, ds, lightning_mask)
 
     return ds, lightning_mask.rename('lightning_mask')
 

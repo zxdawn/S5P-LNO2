@@ -394,7 +394,8 @@ def save_data(savedir, filename, scn, vnames, cfg, lightning_mask, df_viirs=None
             clean_cluster[name] = clean_cluster[name].astype('float32')
 
         # add description
-        clean_cluster['lightning_label'].attrs['description'] = 'Clustered lightning labeled by DBSCAN'
+        clean_cluster['cluster_label'].attrs['description'] = 'Clustered lightning labeled by DBSCAN'
+        clean_cluster['lightning_label'].attrs['description'] = 'Lightning label paired with lightning mask'
         clean_cluster['delta'].attrs['description'] = 'The time difference between detected lightning and TROPOMI overpass time'
         clean_cluster['delta'].attrs['units'] = 'minute'
 

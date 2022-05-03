@@ -31,7 +31,7 @@ filelist = pd.read_csv('./consecutive_swaths.csv', names=['filename'], dtype={'f
 for file in filelist:
     print('Adding NO2 and Temperature profiles to ', file)
     with xr.open_dataset(file, group='S5P') as ds:
-        st = pd.to_datetime(ds.attrs['time_coverage_end'])
+        st = pd.to_datetime(ds.attrs['time_coverage_start'])
         et = pd.to_datetime(ds.attrs['time_coverage_end'])
 
     # get the middle time of orbit

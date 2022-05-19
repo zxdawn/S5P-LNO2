@@ -211,7 +211,11 @@ def get_delta_time(begin_time, end_time):
 def calc_wind(row, coords, u, v, time_pred, lon_column, lat_column):
     '''Calculate the wspd and wdir'''
     # interpolate the u and v fields
-    interp_points = [xr.DataArray(time_pred).astype('float').values, row[lat_column], row[lon_column]]
+    # clip lon and lat in case it's outside of the ERA5 file (please take care!)
+    interp_lat = max(coords[1].min(), min(row[lat_column], coords[1].max()))
+    interp_lon = max(coords[2].min(), min(row[lon_column], coords[2].max()))
+    interp_points = [xr.DataArray(time_pred).astype('float').values, interp_lat, interp_lon]
+
     u_interp = interpn(coords, u, interp_points)
     v_interp = interpn(coords, v, interp_points)
 

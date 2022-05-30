@@ -19,16 +19,19 @@ UPDATE:
        05/12/2021: Basic version
        19/12/2021: Export masks (lightning_mask and nitrogendioxide_segmentation) instead of overlapped lightning
 '''
-
 import functools
 import logging
 import os
+#from multiprocessing import Pool
 from concurrent.futures import ProcessPoolExecutor as Pool
 from warnings import filterwarnings
 
 import numpy as np
 import pandas as pd
 import xarray as xr
+from pandarallel import pandarallel
+from satpy import Scene
+
 from s5p_lnox_utils import *
 
 filterwarnings("ignore")
@@ -111,10 +114,12 @@ def main():
     pattern = os.path.join(cfg['s5p_dir'], '{}{:02}', 'S5P_*_L2__NO2____{}{:02}{:02}T*')
     filelist = sum([glob(pattern.format(date.year, date.month, date.year, date.month, date.day)) for date in req_dates], [])
 
+    #for file in filelist:
+    #    process_data(file, cfg=cfg)
+    #    #break
+
     with Pool(max_workers=int(cfg['num_pool'])) as pool:
         # data process in parallel
-        # we don't use multiprocessing.Pool because it's non-daemonic
-        #  https://stackoverflow.com/a/61470465/7347925
         try:
             pool.map(functools.partial(process_data, cfg=cfg), filelist)
         except Exception as exc:

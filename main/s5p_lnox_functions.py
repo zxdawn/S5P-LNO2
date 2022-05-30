@@ -214,8 +214,8 @@ def calc_wind(row, coords, u, v, time_pred, lon_column, lat_column):
     # clip lon and lat in case it's outside of the ERA5 file (please take care!)
     interp_lat = max(coords[1].min(), min(row[lat_column], coords[1].max()))
     interp_lon = max(coords[2].min(), min(row[lon_column], coords[2].max()))
-    interp_points = [xr.DataArray(time_pred).astype('float').values, interp_lat, interp_lon]
 
+    interp_points = [xr.DataArray(time_pred).astype('float').values, interp_lat, interp_lon]
     u_interp = interpn(coords, u, interp_points)
     v_interp = interpn(coords, v, interp_points)
 
@@ -308,10 +308,10 @@ def mask_label(scn, ds, lightning_mask):
                                       lats=ds['latitude_pred'].isel(level=0))
 
     # assign the mask value as lightning label using the nearest resample
-    lightning_label = kd_tree.resample_nearest(swath_tropomi, lightning_mask,
+    lightning_label = kd_tree.resample_nearest(swath_tropomi, lightning_mask.values,
                                                swath_lightning, radius_of_influence=10000, epsilon=0.5)
-    ds['lightning_label'] = lightning_label
-
+    ds['lightning_label'] = xr.DataArray(lightning_label, coords=[ds['cluster_label'],], dims=['cluster_label'])
+    
     # use the lightning label as the dims
     ds = ds.swap_dims({'cluster_label': 'lightning_label'})
 

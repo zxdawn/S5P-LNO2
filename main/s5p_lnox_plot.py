@@ -110,7 +110,10 @@ def get_features(filenames):
 
     for frame, filename in enumerate(filenames):
         logging.info(f'Processing features of {filename} (Frame {frame})')
-        features.append(read_feature(frame, filename, target_grid))
+        try:
+            features.append(read_feature(frame, filename, target_grid))
+        except:
+            print('!!! Empty group data !!!')
 
     features = xr.concat(features, dim='index')
 

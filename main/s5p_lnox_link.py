@@ -381,7 +381,7 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
 def save_data(case_num, ds_group, ds_lightning, savedir):
     """Save masked data"""
     # get the saving path
-    output_file = os.path.join(savedir, 'S5P_LNO2.nc')
+    output_file = os.path.join(savedir, f'S5P_LNO2_{kind}.nc')
 
     # set compression
     comp = dict(zlib=True, complevel=7)
@@ -445,7 +445,7 @@ def main():
             # save data
             save_data(case_num, ds_group, ds_lightning, savedir)
 
-    logging.info(f'Saved to {savedir}/S5P_LNO2.nc')
+    logging.info(f'Saved to {savedir}/S5P_LNO2_{kind}.nc')
 
 
 if __name__ == '__main__':

@@ -11,6 +11,7 @@ OUTPUT:
 UPDATE:
     Xin Zhang:
         2022-06-17: basic version
+        2022-06-25: add variables: tropopause pressure and cloud pressure
 '''
 
 import gc
@@ -28,6 +29,7 @@ from satpy import Scene
 from scipy import stats
 from scipy.optimize import linprog
 
+from s5p_lnox_amf import cal_tropo
 from s5p_lnox_utils import Config
 
 # Choose the following line for info or debugging:
@@ -39,8 +41,33 @@ logging.getLogger('satpy').setLevel(logging.ERROR)
 def load_s5p(filename):
     """Read TROPOMI data"""
     scn = Scene([filename], reader='tropomi_l2')
-    scn.load(['time_utc', 'longitude', 'latitude'])
+    scn.load(['time_utc', 'longitude', 'latitude',
+              'tm5_constant_a', 'tm5_constant_b', 'tm5_tropopause_layer_index',
+              'surface_pressure', 'cloud_pressure_crb', 'apparent_scene_pressure',
+              'processing_quality_flags'])
+
     overpass_time = pd.to_datetime(scn['time_utc'].where(scn['latitude'].mean('x') >= cfg['lat_min'], drop=True)).mean()
+
+    # calculate pressure levels
+    a = scn['tm5_constant_a']
+    b = scn['tm5_constant_b']
+    psfc = scn['surface_pressure']
+
+    low_p = (a[:, 0] + b[:, 0]*psfc)/1e2
+
+    itropo = scn['tm5_tropopause_layer_index']
+
+    scn['ptropo'] = cal_tropo(low_p, itropo)
+
+    # calculate pqf
+    pqf_mask = 0b1111111
+    pqf = scn['processing_quality_flags'].to_masked_array().astype('uint32') & pqf_mask
+    scn['pqf'] = scn['ptropo'].copy(deep=True)
+    scn['pqf'].values = pqf
+
+    # pick valid data
+    scn['cloud_pressure_crb'] = scn['cloud_pressure_crb'].where(scn['pqf'] == 0)
+    scn['ptropo'] = scn['ptropo'].where(scn['pqf'] == 0)
 
     return scn, overpass_time
 
@@ -134,62 +161,55 @@ def process_data(filename):
     if len(df_lightning['longitude']) > 0:
         lightning_counts = xr.DataArray(stats.binned_statistic_2d(df_lightning['longitude'], df_lightning['latitude'], None,
                                         'count', bins=[lon_bnd, lat_bnd]).statistic,
-                                        dims=['y', 'x'])
-        # pick the lightning in swath mask
-        lightning_counts = lightning_counts.where(scn_resample['mask'].drop_vars('crs'), 0)
+                                        dims=['y', 'x']).rename('lightning_counts').astype('int')
+
+        pcld = xr.DataArray(stats.binned_statistic_2d(scn['longitude'].values.ravel(), scn['latitude'].values.ravel(),
+                                        scn['cloud_pressure_crb'].values.ravel()/100, # hPa
+                                        'min', bins=[lon_bnd, lat_bnd]).statistic,
+                                        dims=['y', 'x']).rename('cloud_pressure_crb')
+
+        ptropo = xr.DataArray(stats.binned_statistic_2d(scn['longitude'].values.ravel(), scn['latitude'].values.ravel(),
+                                        scn['ptropo'].values.ravel(), # hPa
+                                        'min', bins=[lon_bnd, lat_bnd]).statistic,
+                                        dims=['y', 'x']).rename('ptropo')
+
+        # pick the data in swath mask
+        lightning_counts = lightning_counts.where(scn_resample['mask'].drop_vars('crs').fillna(0), 0)
+        pcld = pcld.where(scn_resample['mask'].drop_vars('crs').fillna(0))
+        ptropo = ptropo.where(scn_resample['mask'].drop_vars('crs').fillna(0))
+
     else:
-        lightning_counts = xr.full_like(scn_resample['mask'].drop_vars('crs'), 0).rename('lightning_counts')
+        lightning_counts = xr.full_like(scn_resample['mask'].drop_vars('crs'), 0).rename('lightning_counts').astype('int')
+        pcld = xr.full_like(scn_resample['mask'].drop_vars('crs'), np.nan).rename('cloud_pressure_crb')
+        ptropo = xr.full_like(scn_resample['mask'].drop_vars('crs'), np.nan).rename('ptropo')
+
+    # merge into Dataset
+    ds = xr.merge([lightning_counts, pcld, ptropo])
+    ds['lightning_counts'].attrs['description'] = f"lightning count during {cfg['delta_time']} minutes before TROPOMI overpass"
 
     # add time dim
-    lightning_counts = lightning_counts.expand_dims('time').assign_coords(time=('time', [t_overpass]))
-    lightning_counts['time'] = lightning_counts['time'].astype('datetime64[ns]')
+    ds = ds.expand_dims('time').assign_coords(time=('time', [t_overpass]))
+    ds['time'] = ds['time'].astype('datetime64[ns]')
 
     # add swath coord
     swath = os.path.basename(filename).split('_')[-4]
     lightning_counts.coords['swath'] = swath
 
     # add lon/lat dim
-    lightning_counts = lightning_counts.rename({'y': 'longitude', 'x': 'latitude'})
-    lightning_counts.coords['longitude'] = lon_center
-    lightning_counts.coords['latitude'] = lat_center
-
-    # remove attrs
-    lightning_counts.attrs = []
+    ds = ds.rename({'y': 'longitude', 'x': 'latitude'})
+    ds.coords['longitude'] = lon_center
+    ds.coords['latitude'] = lat_center
 
     # remove data
     del scn, scn_resample['mask'], scn_resample
     gc.collect()
 
-    return lightning_counts.astype('int')
-
-    #  ---- bak ----
-    # # this method is slow
-    # # because it's time consuming to use the exact swath points data
-    # #       we can coarsen it first
-    # coarse_lons = scn['longitude'].coarsen(y=scn['longitude'].sizes['y']//100,
-    #                                        x=scn['longitude'].sizes['x']//100,
-    #                                        boundary="trim").mean()
-
-    # coarse_lats = scn['latitude'].coarsen(y=scn['latitude'].sizes['y']//100,
-    #                                       x=scn['latitude'].sizes['x']//100,
-    #                                       boundary="trim").mean()
-
-    # # get 1D lon and lat of tropomi pixels
-    # points = np.c_[coarse_lons.values.ravel(), coarse_lats.values.ravel()]
-
-    # inside = df_lightning[['longitude', 'latitude']].apply(lambda x: in_hull(points, x.values), axis=1)
-    # df_lightning = df_lightning[inside]
-
-    # # add swath name
-    # swath = os.path.basename(filename).split('_')[-4]
-    # df_lightning['swath'] = 'swath' + swath
-
-    #  return df_lightning
+    return ds
 
 
 def main():
     # get all filenames based on requested date range
-    pattern = os.path.join(cfg['s5p_dir'], '{}{:02}', 'S5P_*_L2__NO2____{}{:02}{:02}T00*')
+    pattern = os.path.join(cfg['s5p_dir'], '{}{:02}', 'S5P_*_L2__NO2____{}{:02}{:02}T*')
     filelist = sum([glob(pattern.format(date.year, date.month, date.year, date.month, date.day)) for date in req_dates], [])
 
     # for file in filelist:
@@ -199,12 +219,11 @@ def main():
     with Pool(3) as p:
         res = p.map(process_data, filelist)
 
-    output = xr.concat(res, 'time').rename('lightning_count')
-    output.attrs['description'] = f"lightning count during {cfg['delta_time']} minutes before TROPOMI overpass"
+    output = xr.concat(res, 'time')
 
     # set encoding
     comp = dict(zlib=True, complevel=7)
-    enc = {'lightning_count': comp}
+    enc = {var: comp for var in output.data_vars}
 
     # export file
     st = req_dates[0].strftime('%Y%m%d')
@@ -215,13 +234,6 @@ def main():
     output.to_netcdf(path=savename,
                      engine='netcdf4',
                      encoding=enc)
-
-    #  ---- bak for slow method ---
-    # df_merge = pd.concat(res).sort_values(by='swath')
-    # # export data
-    # savename = cfg['output_data_dir'] + '/swath_lighting_' + st + '_' + et + '.csv'
-    # logging.info(f'export to {savename}')
-    # df_merge.to_csv(savename, index=False)
 
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ INPUT:
                     Read "linked_cases_nolightning.csv"
 
 OUTPUT:
-    One netcdf file named "S5P_LNO2.nc"
+    One netcdf file named "S5P_LNO2_production.nc" or "S5P_LNO2_lifetime.nc"
         which has S5P data and lightning NO2 variables
 
 UPDATE:
@@ -327,52 +327,36 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
         #   convection_mask is the segmentation of SCDTrop larger than background SCD
         convection_mask, scd_no2_bkgd, lno2_vis, lno2_geo = calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, features, crf_min)
 
-        pasp = ds_mask['apparent_scene_pressure'].where(convection_mask)/100
+        # subset data by segmentation mask
+        # update the area as the segmentation area, instead of the large lightning mask area
+        #   ds_mask['area'] = ds_mask['area'].where(convection_mask)
+        pcld = ds_mask['cloud_pressure_crb'].where(convection_mask)/100
         psfc = ds_mask['surface_pressure'].where(convection_mask)/100
 
-        # set the apparent_scene_pressure as peak pressure if < 500 hPa.
-        peak_pressure = np.min([ds_mask['apparent_scene_pressure'].where(convection_mask).min()/100 + peak_offset, 500])
-
+        # set the cloud pressure as peak pressure disturbed by peak_offset
+        peak_pressure = pcld.min() + peak_offset
         logging.debug(f'Peak pressure is set as {peak_pressure}')
 
-        # calculate LNO2 based on assumed ratio of integrations
-        # --- numba version which is faster than xarray version ---
-        # https://stackoverflow.com/a/72263558/7347925
+        # create the a priori lightning NO2 profile
+        # Gaussian distribution of LNO2: $a * e^\frac{{-{(x - b)}^2}}{2c^{2}}$
+        #   a is neglected because the division of integration offsets it
         factor = -1.0 / (2 * np.power(peak_width, 2))
+        pclr = xr.concat([ds_mask['bot_p'], ds_mask['top_p'][-1, ...]], dim='layer')
+        pclr = pclr.rolling({pclr.dims[0]: 2}).mean()[1:, ...]
+        lno2_priori = np.exp(np.power(pclr - peak_pressure, 2) * factor)
+ 
+        # calculate AMF_LNO2 which depends on the shape instead of quantity,
+        #   and get the VCD_LNO2 which is named "no2Trop" in the Dataset
+        ds_amflno2 = cal_amf(ds_mask, s5p_origin,
+                             xr.merge([lno2_priori.rename('no2'), ds_mask['temperature'].rename('tk')]),
+                             bAmfClr, bAmfCld)
 
-        @nb.cfunc('float64(float64)')
-        def compute_numba(x):
-            return np.exp(np.power(x - peak_pressure, 2) * factor)
-
-        compute_c = LowLevelCallable(compute_numba.ctypes)
-
-        lno2_tropo_cloud = np.full(ptropo.shape, np.nan)
-        lno2_tropo_sfc = np.full(ptropo.shape, np.nan)
-
-        for i in range(ptropo.shape[0]):
-            for j in range(ptropo.shape[1]):
-                lno2_tropo_cloud[i, j] = integrate_lno2(ptropo.values[i, j], pasp.values[i, j], compute_c)
-                lno2_tropo_sfc[i, j] = integrate_lno2(ptropo.values[i, j], psfc.values[i, j], compute_c)
-
-        # # ---- bak: xarray version which is slower ---
-        # lno2_tropo_cloud =  xr.apply_ufunc(integrate_lno2_xr,
-        #                                    ptropo.chunk({'y': ptropo.sizes['y'],
-        #                                                  'x': ptropo.sizes['x']}),
-        #                                    pasp,
-        #                                    peak_pressure, peak_width, vectorize=True,
-        #                                    dask="parallelized", output_dtypes=[ptropo.dtype])
-
-        # lno2_tropo_sfc =  xr.apply_ufunc(integrate_lno2_xr,
-        #                                  ptropo.chunk({'y': ptropo.sizes['y'],
-        #                                                'x': ptropo.sizes['x']}),
-        #                                     psfc,
-        #                                     peak_pressure, peak_width, vectorize=True,
-        #                                     dask="parallelized", output_dtypes=[ptropo.dtype])
-
-        lno2 = lno2_vis.where(convection_mask) / (lno2_tropo_cloud/lno2_tropo_sfc)
+        lno2 = ds_amflno2['no2Trop']
+        amf_lno2 = ds_amflno2['amfTrop']
 
         return t_overpass, ds_mask, ds_amf, ds_lightning, \
                ptropo.rename('tropopause_pressure'), scd_no2_bkgd.rename('SCD_Bkgd'), \
+               amf_lno2.rename('amflno2'), \
                lno2_vis.rename('lno2vis').where(convection_mask), \
                lno2_geo.rename('lno2geo').where(convection_mask), \
                lno2.rename('lno2').where(convection_mask)
@@ -407,6 +391,7 @@ def save_data(case_num, ds_group, ds_lightning, savedir):
     logging.debug(' '*8 + 'Saving lightning ...')
     enc = {var: comp for var in ds_lightning.data_vars}
 
+    logging.info(f'Saved to {output_file}')
     ds_lightning.to_netcdf(path=output_file,
                             group=f'Case{case_num}/Swath{swath_name}/Lightning',
                             engine='netcdf4',
@@ -426,11 +411,10 @@ def main():
     for case_num, df_group in df.groupby('case'):
         logging.info(f'Case: {case_num}')
         for row_id, row in df_group.iterrows():
-            #print(row)
-            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, lno2vis, lno2geo, lno2 = read_file(row, lut)
+            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, amflno2, lno2vis, lno2geo, lno2 = read_file(row, lut)
 
             # merge calculated variables into one Dataset
-            ds_merge = xr.merge([ptropo, scd_no2_bkgd, lno2vis, lno2geo, lno2])
+            ds_merge = xr.merge([ptropo, scd_no2_bkgd, amflno2, lno2vis, lno2geo, lno2])
 
             # assign time dim
             ds_mask = ds_mask.assign_coords(time=t_overpass).expand_dims('time')
@@ -444,15 +428,17 @@ def main():
 
             # save data
             save_data(case_num, ds_group, ds_lightning, savedir)
+            break
+        break
 
-    logging.info(f'Saved to {savedir}/S5P_LNO2_{kind}.nc')
+
 
 
 if __name__ == '__main__':
     # read config file
     cfg = Config('settings.txt')
     logging.info(cfg)
-    kind = 'lifetime' # 'production' or 'lifetime'
+    kind = 'production' # 'production' or 'lifetime'
 
     # load the LUT data
     lut_pattern = glob(cfg['s5p_dir']+'/S5P_OPER_LUT_NO2AMF*')

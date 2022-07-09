@@ -120,7 +120,7 @@ def feature(threshold, target='maximum',
 
 def get_feature(ds_mask, alpha_high):
     # fill few nan values
-    scd_no2 = ds_mask['SCD_Trop'].rio.write_crs(4326).rio.write_nodata(np.nan).rio.interpolate_na(method='linear').drop_vars('spatial_ref')
+    scd_no2 = ds_mask['SCD_Trop'].rio.write_crs(4326).rio.write_nodata(np.nan).rio.interpolate_na(method='linear').drop_vars('spatial_ref').rename('scdTrop')
     scd_no2.load()
 
     # normalize the SCD data
@@ -186,14 +186,14 @@ def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, 
     lno2_vis.load()
     # lno2_vis = xr.DataArray(lno2_vis, dims=['y', 'x']).assign_coords(longitude=ds_mask['longitude'])
 
-    # convection_mask = ds_mask['lightning_mask']>0
-    # convection_mask = (ds_mask['lightning_mask']>0)&(ds_mask['cloud_radiance_fraction_nitrogendioxide_window'] > crf_min)
+    # lno2_mask = ds_mask['lightning_mask']>0
+    # lno2_mask = (ds_mask['lightning_mask']>0)&(ds_mask['cloud_radiance_fraction_nitrogendioxide_window'] > crf_min)
 
     # update crf
     scene_mode(ds_mask)
-    convection_mask = (ds_mask['cloud_radiance_fraction_nitrogendioxide_window'] > crf_min) & ~xr.ufuncs.isnan(masks_no2)
+    lno2_mask = (ds_mask['cloud_radiance_fraction_nitrogendioxide_window'] > crf_min) & ~xr.ufuncs.isnan(masks_no2)
 
-    return convection_mask, scd_no2_bkgd, lno2_vis, lno2_geo
+    return lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo
 
 
 def get_overpass(row):
@@ -311,12 +311,17 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
     if not features:
         # no features are detected
         # copy dataarray
-        scd_no2_bkgd = ptropo.copy().rename('SCD_Bkgd')
+        lno2_mask = ptropo.copy().rename('lno2_mask')
+        scd_no2_bkgd = ptropo.copy().rename('scdBkgd')
+        amf_lno2 = ptropo.copy().rename('amflno2')
         lno2_vis = ptropo.copy().rename('lno2vis')
         lno2_geo = ptropo.copy().rename('lno2geo')
         lno2 = ptropo.copy().rename('lno2')
 
         # set value to nan
+        lno2_mask[:] = 0 # zero means no lightning NO2 is detected
+        scd_no2_bkgd[:] = np.nan
+        amf_lno2[:] = np.nan
         lno2_vis[:] = np.nan
         lno2_geo[:] = np.nan
         lno2[:] = np.nan
@@ -324,14 +329,14 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
         return t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, lno2_vis, lno2_geo, lno2
     else:
         # calculate LNO2Vis and LNO2Geo
-        #   convection_mask is the segmentation of SCDTrop larger than background SCD
-        convection_mask, scd_no2_bkgd, lno2_vis, lno2_geo = calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, features, crf_min)
+        #   lno2_mask is the segmentation of SCDTrop larger than background SCD
+        lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo = calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, features, crf_min)
 
         # subset data by segmentation mask
         # update the area as the segmentation area, instead of the large lightning mask area
-        #   ds_mask['area'] = ds_mask['area'].where(convection_mask)
-        pcld = ds_mask['cloud_pressure_crb'].where(convection_mask)/100
-        psfc = ds_mask['surface_pressure'].where(convection_mask)/100
+        #   ds_mask['area'] = ds_mask['area'].where(lno2_mask)
+        pcld = ds_mask['cloud_pressure_crb'].where(lno2_mask)/100
+        psfc = ds_mask['surface_pressure'].where(lno2_mask)/100
 
         # set the cloud pressure as peak pressure disturbed by peak_offset
         peak_pressure = pcld.min() + peak_offset
@@ -355,11 +360,12 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
         amf_lno2 = ds_amflno2['amfTrop']
 
         return t_overpass, ds_mask, ds_amf, ds_lightning, \
-               ptropo.rename('tropopause_pressure'), scd_no2_bkgd.rename('SCD_Bkgd'), \
+               ptropo.rename('tropopause_pressure'), scd_no2_bkgd.rename('scdBkgd'), \
                amf_lno2.rename('amflno2'), \
-               lno2_vis.rename('lno2vis').where(convection_mask), \
-               lno2_geo.rename('lno2geo').where(convection_mask), \
-               lno2.rename('lno2').where(convection_mask)
+               lno2_mask.rename('lno2_mask'), \
+               lno2_vis.rename('lno2vis').where(lno2_mask), \
+               lno2_geo.rename('lno2geo').where(lno2_mask), \
+               lno2.rename('lno2').where(lno2_mask)
 
 
 def save_data(case_num, ds_group, ds_lightning, savedir):
@@ -411,10 +417,10 @@ def main():
     for case_num, df_group in df.groupby('case'):
         logging.info(f'Case: {case_num}')
         for row_id, row in df_group.iterrows():
-            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, amflno2, lno2vis, lno2geo, lno2 = read_file(row, lut)
+            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2 = read_file(row, lut)
 
             # merge calculated variables into one Dataset
-            ds_merge = xr.merge([ptropo, scd_no2_bkgd, amflno2, lno2vis, lno2geo, lno2])
+            ds_merge = xr.merge([ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2])
 
             # assign time dim
             ds_mask = ds_mask.assign_coords(time=t_overpass).expand_dims('time')

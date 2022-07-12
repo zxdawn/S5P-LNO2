@@ -4,6 +4,7 @@ import os
 from configparser import SafeConfigParser
 from datetime import datetime
 
+import geopandas
 import geopy
 import metpy.calc as mpcalc
 import numpy as np
@@ -11,11 +12,13 @@ import pandas as pd
 import tobac
 import xarray as xr
 from geopy.distance import geodesic
+from matplotlib.path import Path
 from metpy.units import units
 from pyresample import kd_tree
 from pyresample.geometry import SwathDefinition
 from scipy.interpolate import interpn
 from scipy.spatial import ConvexHull
+from shapely.geometry import LineString, MultiPoint, Point
 
 
 class Config(dict):
@@ -281,24 +284,6 @@ def predict_loc(row, level, coords, u, v):
     return row
 
 
-def in_hull(p, hull):
-    """
-    Test if points in `p` are in `hull`
-
-    `p` should be a `NxK` coordinates of `N` points in `K` dimensions
-    `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the
-    coordinates of `M` points in `K`dimensions for which Delaunay triangulation
-    will be computed
-
-    https://stackoverflow.com/a/16898636/7347925
-    """
-    from scipy.spatial import Delaunay
-    if not isinstance(hull, Delaunay):
-        hull = Delaunay(hull)
-
-    return hull.find_simplex(p) >= 0
-
-
 def mask_label(scn, ds, lightning_mask):
     '''Generate the lightning label based on mask value'''
     # define the swaths
@@ -337,12 +322,33 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
     for index, label in enumerate(labels):
         # iterate each label and update the mask
         dfq = ds.sel(cluster_label=label)
+
         # we use the lightning prediction over different pressure levels to create mask
         lon_lat = dfq[['longitude_pred', 'latitude_pred']].stack(all=("level", "cluster_label"))
         lightning_points = lon_lat.to_array().transpose('all', ...)
 
+        # convert longitude from -180 ~ 180 to 0 ~ 360
+        lightning_points[:, 0] %= 360
+
+        # the cross line
+        intersecting_line = LineString(((180, -90), (180, 90)))
+
+        # combine the points into convex hull
+        hull = MultiPoint(lightning_points).convex_hull
+
+        # if the convex hull doesn't corss the 180 line,
+        #   convert the longitude back to -180 ~ 180,
+        #   and recreate the convex hull
+        if not hull.intersects(intersecting_line):
+            lightning_points[:, 0] %= 360
+            hull = MultiPoint(lightning_points).convex_hull
+
+        # use matplotlib path instead of for loop to check the pixel points inside the convex hull
+        #   https://iotespresso.com/find-which-points-of-a-set-lie-within-a-polygon/
+        path_p = Path(hull.boundary)
+
         # get the mask where predicted lightning is inside
-        mask = in_hull(pixel_points, lightning_points).reshape(scn['nitrogendioxide_tropospheric_column'].shape, order='F')
+        mask = path_p.contains_points(pixel_points).reshape(scn['nitrogendioxide_tropospheric_column'].shape, order='F')
 
         # get the overplapped DBSCAN label
         overlapped_label = np.delete(np.unique(lightning_mask.where(xr.DataArray(mask, dims=['y', 'x']), 0)), 0)

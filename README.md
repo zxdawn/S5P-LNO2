@@ -2,13 +2,12 @@
 
 ## Work flow
 
-1. Select lightning-swaths with both lightning and high NO2, and save them to nc files. [*s5p_lnox_main.py*]
-2. Find the consecutive lightning-swaths and save to csv files. [s5p_lnox_consecutive_swaths.py]
-3. Extract TM5 no2\_vmr and temperature profiles for consecutive lightning-swaths. [*s5p_lnox_tm5_extract.py*]
-4. Link the consecutive lightning-swaths and
-   - calculate lightning variables (AMFs, SCD_Bkgd, tropopause_pressure, lno2vis, lno2_geo and lno2) and save them to one netcdf file called "S5P_LNO2.nc" [*s5p_lnox_link.py*]
-   - plot linked variables and save them to images [*s5p_lnox_plot_tracks.py*]
-5. Calculate lightning NO2 production efficiency and save all useful variables to one CSV file called "S5P_LNO2_PE.csv". [*s5p_lnox_pe.py*]
+1. Select lightning-swaths with both lightning and high NO2, and save them to nc files. [*s5p_lno2_main.py*]
+2. Link the consecutive lightning-swath cases and save variables (case No., filename, and mask label) to csv files. [*s5p_lno2_cases.py*]
+2. Plot linked variables and save them as images to filter cases manually [*s5p_lno2_plot.py*]. We are still thinking how to convert the manual part into an auto one.
+3. Extract TM5 no2\_vmr and temperature profiles for consecutive lightning-swaths. [*s5p_lno2_tm5_extract.py*]
+5. Calculate lightning variables (AMFs, SCD_Bkgd, tropopause_pressure, lno2vis, lno2_geo and lno2) and save them to one netcdf file called "S5P_LNO2.nc" [*s5p_lno2_product.py*]
+6. Calculate lightning NO2 production efficiency and save all useful variables to one CSV file called "S5P_LNO2_PE.csv". [*s5p_lno2_pe.py*]
 
 For details about the products mentioned above, please check **[User's Guide]()**.
 

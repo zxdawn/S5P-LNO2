@@ -371,7 +371,7 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
 def save_data(case_num, ds_group, ds_lightning, savedir):
     """Save masked data"""
     # get the saving path
-    output_file = os.path.join(savedir, f'S5P_LNO2_{kind}.nc')
+    output_file = os.path.join(savedir, f'S5P_LNO2_{kind}_test.nc')
 
     # set compression
     comp = dict(zlib=True, complevel=7)
@@ -444,6 +444,7 @@ if __name__ == '__main__':
     # read config file
     cfg = Config('settings.txt')
     logging.info(cfg)
+    #kind = 'lifetime' # 'production' or 'lifetime'
     kind = 'production' # 'production' or 'lifetime'
 
     # load the LUT data

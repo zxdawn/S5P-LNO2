@@ -130,8 +130,8 @@ def read_feature(frame, filename, target_grid):
                            'latitude': (['index'], lat_centers),
                            'label': (['index'], labels),
                            'fresh_lightning': (['index'], fresh_lightnings),
-                           'filename': (['index'], [os.path.basename(filename)]*len(y))
-                           # 'filename': (['index'], [filename]*len(y))
+                           # 'filename': (['index'], [os.path.basename(filename)]*len(y))
+                           'filename': (['index'], [filename]*len(y))
                            })
 
 

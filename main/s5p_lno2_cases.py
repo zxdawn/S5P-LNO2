@@ -3,7 +3,7 @@ INPUT:
     - Processed S5P (TROPOPMI) L2 product files by `s5p_lno2_main.py`
 
 OUTPUT:
-    - csv file (yyyymmdd-yyyymmdd.csv) which save the linked cases
+    - csv file (lno2_cases_yyyymmdd-yyyymmdd.csv) which saves the linked cases
         Columns: case, label, filename, fresh_lightning
             - case: the index of cases
             - label: the lightning_label in the processed S5P L2 product
@@ -41,8 +41,8 @@ logging.basicConfig(level=logging.INFO)
 
 def resample_grid(lon_min, lon_max, lat_min, lat_max):
     '''Define the resampled grid with 0.125 degree resolution'''
-    grid_lon = np.arange(lon_min, lon_max, 0.125)
-    grid_lat = np.arange(lat_min, lat_max, 0.125)
+    grid_lon = np.arange(lon_min, lon_max+0.125, 0.125)
+    grid_lat = np.arange(lat_min, lat_max+0.125, 0.125)
     lons, lats = np.meshgrid(grid_lon, grid_lat)
     target_grid = GridDefinition(lons=lons, lats=lats)
 
@@ -91,7 +91,7 @@ def read_feature(frame, filename, target_grid):
     #     return None
 
     for label in labels:
-        # calculate the center of the lightning mask
+        # calculate the center of lightning mask
         mask = ds['lightning_mask'] == label
         lon_mean = ds['longitude'].where(mask, drop=True).mean()
         lat_mean = ds['latitude'].where(mask, drop=True).mean()
@@ -254,7 +254,7 @@ def main():
                       index=['case', 'label', 'filename', 'fresh_lightning']).T
     # sort by case index and filename
     df = df.sort_values(['case', 'filename'])
-    print(df)
+    logging.info(df)
 
     # export data
     st = req_dates[0].strftime('%Y%m%d')

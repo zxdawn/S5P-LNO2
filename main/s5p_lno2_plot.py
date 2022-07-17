@@ -166,7 +166,7 @@ def plot_func(ds_tropomi, ds_lightning, case_index, frame, mask_label):
     ax.contour(lightning_mask.longitude, lightning_mask.latitude, lightning_mask,
                levels=[1], colors=['red5'])
 
-    recent_lightning = (ds_lightning['delta'] > -100).sum().values
+    recent_lightning = (ds_lightning['delta'].where(ds_lightning['lightning_label'] == mask_label) > -100).sum().values
     ax.format(title=f"Horizontal transport of lightning tracer \n Flash Count in 100 min : {recent_lightning} \n Mask label: {mask_label}")
 
     ax = axs[7]

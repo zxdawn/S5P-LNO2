@@ -340,8 +340,11 @@ def convert_cluster(scn, df, lightning_mask, kind='clean'):
         #   convert the longitude back to -180 ~ 180,
         #   and recreate the convex hull
         if not hull.intersects(intersecting_line):
-            lightning_points[:, 0] %= 360
+            lightning_points[:, 0] = (lightning_points[:, 0] + 180) % 360 - 180
             hull = MultiPoint(lightning_points).convex_hull
+        else:
+            # convert the TROPOMI longitude to 0 ~ 360
+            pixel_points[:, 0] %= 360
 
         # use matplotlib path instead of for loop to check the pixel points inside the convex hull
         #   https://iotespresso.com/find-which-points-of-a-set-lie-within-a-polygon/

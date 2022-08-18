@@ -292,8 +292,8 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
                              xr.merge([lno2_priori.rename('no2'), ds_mask['temperature'].rename('tk')]),
                              bAmfClr, bAmfCld)
 
-        lno2 = ds_amflno2['no2Trop']
         amf_lno2 = ds_amflno2['amfTrop']
+        lno2 = (ds_amflno2['no2Trop']*amf_lno2 - scd_no2_bkgd) / amf_lno2
 
         return t_overpass, ds_mask, ds_amf, ds_lightning, \
                ptropo.rename('tropopause_pressure'), scd_no2_bkgd.rename('scdBkgd'), \

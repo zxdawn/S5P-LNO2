@@ -15,22 +15,26 @@ import numpy as np
 from glob import glob
 from datetime import datetime
 from multiprocessing import Pool
-from s5p_lnox_utils import Config
+from s5p_lno2_utils import Config
 
 cfg = Config('settings.txt')
 
-num_pool = 5
+num_pool = 8
 tropomi_dir = cfg['s5p_dir']+'/20**/'
-save_dir = './tropomi_regrid/'
+save_dir = './tropomi_regrid_qa75/'
 
-lat_bins = np.arange(60, 90.1, 0.1)
-lon_bins = np.arange(-180, 180.1, 0.1)
+lat_bins = np.linspace(60, 90, 301)
+lon_bins = np.linspace(-180, 180, 3601)
+#lat_bins = np.arange(60, 90.1, 0.1)
+#lon_bins = np.arange(-180, 180.1, 0.1)
 bin_spatial = f'bin_spatial({tuple(lat_bins)}, {tuple(lon_bins)})'
 
 
 def pre_process(filename):
     '''Subset valid data in the Arctic'''
     operations = ';'.join(['latitude >= 60[degree_north]',
+                           'tropospheric_NO2_column_number_density_validity > 0.75',
+                           #'scene_pressure - 0.98*surface_pressure > 0',
                            'keep(datetime_start, orbit_index, latitude, longitude, \
                                  validity, solar_zenith_angle,  cloud_fraction, \
                                  cloud_pressure, tropospheric_NO2_column_number_density)',
@@ -38,12 +42,14 @@ def pre_process(filename):
 
     try:
         product = harp.import_product(filename, operations)
+        return product
 
-        pqf = product.validity.data.astype('uint32') & 0b1111111
-        product.pqf = harp.Variable(pqf, ["time", ])
-        product_pqf = harp.execute_operations(product, operations='pqf==0')
+        #pqf = product.validity.data.astype('uint32') & 0b1111111
+        #product.pqf = harp.Variable(pqf, ["time", ])
+        #product_pqf = harp.execute_operations(product, operations='pqf==0')
 
-        return product_pqf
+        #return product_pqf
+
     except harp.NoDataError:
         print(f'No valid data for {filename}')
         return None

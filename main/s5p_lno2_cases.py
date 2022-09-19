@@ -3,7 +3,7 @@ INPUT:
     - Processed S5P (TROPOPMI) L2 product files by `s5p_lno2_main.py`
 
 OUTPUT:
-    - csv file (lno2_cases_yyyymmdd-yyyymmdd.csv) which saves the linked cases
+    - csv file (lno2_cases_yyyymmdd-yyyymmdd.csv) which saves the consecutive swaths data
         Columns: case, label, filename, fresh_lightning
             - case: the index of cases
             - label: the lightning_label in the processed S5P L2 product
@@ -54,7 +54,7 @@ def set_parameters():
     parameters_linking = {}
     parameters_linking['dxy'] = 5000  # m
     parameters_linking['dt'] = 1.5*3600  # s
-    parameters_linking['vmax'] = 100  # m/s, actually this doesn't stand for the vmax because the NO2 mask is larger than the lightning/cloud region
+    parameters_linking['vmax'] = 50  # m/s, actually this doesn't stand for the vmax because the NO2 mask is larger than the lightning/cloud region
     parameters_linking['stubs'] = 2
     parameters_linking['order'] = 1
     parameters_linking['extrapolate'] = 1
@@ -133,7 +133,6 @@ def read_feature(frame, filename, target_grid):
                            # 'filename': (['index'], [os.path.basename(filename)]*len(y))
                            'filename': (['index'], [filename]*len(y))
                            })
-
 
     return features
 

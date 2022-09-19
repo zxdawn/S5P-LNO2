@@ -2,6 +2,16 @@
 
 ## Work flow
 
+![workflow](workflow.jpg)
+
+Users need to prepare the *Input Data* first and then run the scripts one by one.
+
+Please feel free to modify the *settings.txt* file for your own research.
+
+
+
+Detailed explanations of main scripts:
+
 1. Select lightning-swaths with both lightning and high NO2, and save them to nc files. [*s5p_lno2_main.py*]
 2. Link the consecutive lightning-swath cases and save variables (case No., filename, and mask label) to csv files. [*s5p_lno2_cases.py*]
 2. Combine the generated csv file into fresh\_lightning\_cases.csv or nolightning\_cases.csv.  [*s5p_lno2_cases_sum.py*]
@@ -9,8 +19,6 @@
 3. Extract TM5 no2\_vmr and temperature profiles for consecutive lightning-swaths. [*s5p_lno2_tm5_extract.py*]
 5. Calculate lightning variables (AMFs, SCD_Bkgd, tropopause_pressure, lno2vis, lno2_geo and lno2) and save them to one netcdf file called "S5P_LNO2.nc" [*s5p_lno2_product.py*]
 6. Calculate lightning NO2 production efficiency and save all useful variables to one CSV file called "S5P_LNO2_PE.csv". [*s5p_lno2_pe.py*]
-
-For details about the products mentioned above, please check **[User's Guide]()**.
 
 ## Input Data
 

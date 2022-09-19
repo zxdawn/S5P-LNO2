@@ -15,7 +15,6 @@ UPDATE:
 import gc
 import logging
 import os
-from glob import glob
 
 import pandas as pd
 import proplot as pplt
@@ -188,8 +187,14 @@ def plot_func(ds_tropomi, ds_lightning, case_index, frame, mask_label):
     ax.format(title='Masked NO$_2$ VCD')
 
     # in case the point cross 180E
-    if lon_max - lon_min > 180:
-        lon_min = min([n for n in ds_lightning['longitude'] if n > 0]).values
+    if (len(ds_lightning['longitude']) > 0) and (lon_max - lon_min > 180):
+        lon_east = [n for n in ds_lightning['longitude'] if n >= 0]
+        if len(lon_east) > 0:
+            lon_min = min(lon_east).values
+        else:
+            # sometimes the mask is wrong
+            lon_min = ds_lightning['longitude'].min().values
+            lon_max = ds_lightning['longitude'].max().values
 
     axs.format(xlim=(lon_min, lon_max), ylim=(lat_min, lat_max),
                suptitle=ds_tropomi.s5p_filename,

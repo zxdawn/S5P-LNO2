@@ -1,0 +1,25 @@
+name: s5p_lno2
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.8
+  - numpy
+  - numba
+  - matplotlib
+  - pandas
+  - pandarallel
+  - geopandas
+  - scipy
+  - shapely
+  - scikit-learn
+  - xarray
+  - netCDF4
+  - dask
+  - satpy
+  - pyresample
+  - geopy
+  - metpy
+  - tobac
+  - cartopy
+  - proplot
+  - xhistogram

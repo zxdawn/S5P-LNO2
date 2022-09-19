@@ -32,8 +32,8 @@ from distfit import distfit
 # from pyproj import Geod
 # from shapely.geometry import Polygon
 
-from s5p_lnox_amf import cal_amf, cal_bamf, cal_tropo, scene_mode
-from s5p_lnox_utils import Config
+from s5p_lno2_amf import cal_amf, cal_bamf, cal_tropo, scene_mode
+from s5p_lno2_utils import Config
 
 filterwarnings("ignore")
 # Choose the following line for info or debugging:

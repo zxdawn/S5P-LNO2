@@ -32,6 +32,7 @@ output_data_dir = cfg['output_data_dir']
 
 # get the consecutive swaths
 filelist = pd.read_csv(output_data_dir+'/fresh_lightning_cases.csv')['filename']  # or nolightning_cases.csv
+#filelist = pd.read_csv(output_data_dir+'/no_lightning_cases.csv')['filename']  # or nolightning_cases.csv
 
 # # if you want to extract CTMANA for all files, uncomment these lines below
 #clean_dir = cfg['output_data_dir'] + '/clean_lightning/'  # directory to only save clean lightning cases

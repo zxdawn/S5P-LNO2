@@ -29,8 +29,8 @@ from satpy import Scene
 from scipy import stats
 from scipy.optimize import linprog
 
-from s5p_lnox_amf import cal_tropo
-from s5p_lnox_utils import Config
+from s5p_lno2_amf import cal_tropo
+from s5p_lno2_utils import Config
 
 # Choose the following line for info or debugging:
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +44,7 @@ def load_s5p(filename):
     scn.load(['time_utc', 'longitude', 'latitude',
               'tm5_constant_a', 'tm5_constant_b', 'tm5_tropopause_layer_index',
               'surface_pressure', 'cloud_pressure_crb', 'apparent_scene_pressure',
-              'processing_quality_flags'])
+              'cloud_radiance_fraction_nitrogendioxide_window', 'processing_quality_flags'])
 
     overpass_time = pd.to_datetime(scn['time_utc'].where(scn['latitude'].mean('x') >= cfg['lat_min'], drop=True)).mean()
 
@@ -58,6 +58,7 @@ def load_s5p(filename):
     itropo = scn['tm5_tropopause_layer_index']
 
     scn['ptropo'] = cal_tropo(low_p, itropo)
+    scn['apparent_scene_pressure'] /= 100
 
     # calculate pqf
     pqf_mask = 0b1111111
@@ -66,8 +67,9 @@ def load_s5p(filename):
     scn['pqf'].values = pqf
 
     # pick valid data
-    scn['cloud_pressure_crb'] = scn['cloud_pressure_crb'].where(scn['pqf'] == 0)
-    scn['ptropo'] = scn['ptropo'].where(scn['pqf'] == 0)
+    cloud_mask = (scn['cloud_radiance_fraction_nitrogendioxide_window']>=crf_low) & (scn['pqf'] == 0)
+    scn['cloud_pressure_crb'] = scn['cloud_pressure_crb'].where(cloud_mask)
+    scn['ptropo'] = scn['ptropo'].where(cloud_mask)
 
     return scn, overpass_time
 
@@ -166,26 +168,43 @@ def process_data(filename):
         pcld = xr.DataArray(stats.binned_statistic_2d(scn['longitude'].values.ravel(), scn['latitude'].values.ravel(),
                                         scn['cloud_pressure_crb'].values.ravel()/100, # hPa
                                         'min', bins=[lon_bnd, lat_bnd]).statistic,
-                                        dims=['y', 'x']).rename('cloud_pressure_crb')
+                                        dims=['y', 'x']).rename('pcld')
 
         ptropo = xr.DataArray(stats.binned_statistic_2d(scn['longitude'].values.ravel(), scn['latitude'].values.ravel(),
                                         scn['ptropo'].values.ravel(), # hPa
                                         'min', bins=[lon_bnd, lat_bnd]).statistic,
                                         dims=['y', 'x']).rename('ptropo')
 
+        psc = xr.DataArray(stats.binned_statistic_2d(scn['longitude'].values.ravel(), scn['latitude'].values.ravel(),
+                                        scn['apparent_scene_pressure'].values.ravel(), # hPa
+                                        'min', bins=[lon_bnd, lat_bnd]).statistic,
+                                        dims=['y', 'x']).rename('psc')
+
         # pick the data in swath mask
         lightning_counts = lightning_counts.where(scn_resample['mask'].drop_vars('crs').fillna(0), 0)
         pcld = pcld.where(scn_resample['mask'].drop_vars('crs').fillna(0))
         ptropo = ptropo.where(scn_resample['mask'].drop_vars('crs').fillna(0))
+        psc = psc.where(scn_resample['mask'].drop_vars('crs').fillna(0))
 
     else:
         lightning_counts = xr.full_like(scn_resample['mask'].drop_vars('crs'), 0).rename('lightning_counts').astype('int')
-        pcld = xr.full_like(scn_resample['mask'].drop_vars('crs'), np.nan).rename('cloud_pressure_crb')
+        pcld = xr.full_like(scn_resample['mask'].drop_vars('crs'), np.nan).rename('pcld')
         ptropo = xr.full_like(scn_resample['mask'].drop_vars('crs'), np.nan).rename('ptropo')
+        psc = xr.full_like(scn_resample['mask'].drop_vars('crs'), np.nan).rename('psc')
 
     # merge into Dataset
-    ds = xr.merge([lightning_counts, pcld, ptropo])
-    ds['lightning_counts'].attrs['description'] = f"lightning count during {cfg['delta_time']} minutes before TROPOMI overpass"
+    ds = xr.merge([lightning_counts, pcld, ptropo, psc])
+    # remove attributes
+    ds.attrs = []
+    ds['lightning_counts'].attrs = []
+    ds['pcld'].attrs = []
+    ds['ptropo'].attrs = []
+    ds['psc'].attrs = []
+
+    ds['lightning_counts'].attrs['description'] = f"Lightning count during {cfg['delta_time']} minutes before TROPOMI overpass"
+    ds['pcld'].attrs['description'] = f"Minimum cloud pressure in grids"
+    ds['ptropo'].attrs['description'] = f"Minimum tropopause pressure in grids"
+    ds['psc'].attrs['description'] = f"Minimum apparent scene pressure in grids"
 
     # add time dim
     ds = ds.expand_dims('time').assign_coords(time=('time', [t_overpass]))
@@ -199,6 +218,7 @@ def process_data(filename):
     ds = ds.rename({'y': 'longitude', 'x': 'latitude'})
     ds.coords['longitude'] = lon_center
     ds.coords['latitude'] = lat_center
+
 
     # remove data
     del scn, scn_resample['mask'], scn_resample
@@ -229,7 +249,7 @@ def main():
     st = req_dates[0].strftime('%Y%m%d')
     et = req_dates[-1].strftime('%Y%m%d')
 
-    savename = cfg['output_data_dir'] + '/swath_lighting_' + st + '_' + et + '.nc'
+    savename = cfg['output_data_dir'] + f'/swath_lightning_crf{str(int(crf_low*100))}_' + st + '_' + et + '.nc'
     logging.info(f'export to {savename}')
     output.to_netcdf(path=savename,
                      engine='netcdf4',
@@ -242,6 +262,9 @@ if __name__ == '__main__':
     logging.info(cfg)
 
     overwrite = cfg.get('overwrite', 'True') == 'True'
+
+    # set the low limit of cloud radiance fraction (CRF)
+    crf_low = 0
 
     # generate data range
     req_dates = pd.date_range(start=cfg['start_date'],

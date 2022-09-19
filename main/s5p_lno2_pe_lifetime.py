@@ -22,7 +22,7 @@ import pandas as pd
 import logging
 import xarray as xr
 from netCDF4 import Dataset
-from s5p_lnox_utils import Config
+from s5p_lno2_utils import Config
 from functools import partial
 from multiprocessing import Pool
 import cartopy.io.shapereader as shpreader

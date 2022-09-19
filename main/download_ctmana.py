@@ -11,7 +11,7 @@ UPDATE:
 import pandas as pd
 from datetime import datetime, timedelta
 from pytropomi.downs5p import downs5p
-from s5p_lnox_utils import Config
+from s5p_lno2_utils import Config
 
 cfg = Config('settings.txt')
 ctmana_dir = cfg['ctmana_dir']

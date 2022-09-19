@@ -30,7 +30,7 @@ import xarray as xr
 from pyresample import kd_tree
 from pyresample.geometry import GridDefinition, SwathDefinition
 
-from s5p_lnox_utils import Config
+from s5p_lno2_utils import Config
 
 filterwarnings("ignore")
 # Choose the following line for info or debugging:

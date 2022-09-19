@@ -18,7 +18,7 @@ from glob import glob
 from itertools import groupby
 import pandas as pd
 
-from s5p_lnox_utils import Config
+from s5p_lno2_utils import Config
 
 logging.basicConfig(level=logging.INFO)
 

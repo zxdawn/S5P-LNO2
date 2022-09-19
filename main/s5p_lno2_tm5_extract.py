@@ -20,7 +20,7 @@ from glob import glob
 import pandas as pd
 import xarray as xr
 from datetime import timedelta
-from s5p_lnox_utils import Config
+from s5p_lno2_utils import Config
 from TM5_profile import extract_orbit
 
 # read config file

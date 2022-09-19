@@ -21,7 +21,7 @@ import proplot as pplt
 import xarray as xr
 from pandarallel import pandarallel
 
-from s5p_lnox_utils import Config
+from s5p_lno2_utils import Config
 
 pplt.rc.reso = 'med'
 

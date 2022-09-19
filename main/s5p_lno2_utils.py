@@ -1,5 +1,5 @@
 '''
-Some utils for s5p_lnox_main.py
+Some utils for s5p_lno2_main.py
 
 UPDATE:
     Xin Zhang:
@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from satpy import Scene
-from s5p_lnox_functions import *
+from s5p_lno2_functions import *
 from scipy.spatial import ConvexHull
 from shapely.geometry import MultiPoint, Point
 from sklearn.cluster import DBSCAN
@@ -282,8 +282,14 @@ def lightning_mask(scn, clean_cluster, polluted_cluster):
     logging.info(' '*4 + 'Creating lightning mask ...')
 
     # initialize the masks
-    clean_lightning_mask = xr.full_like(scn['nitrogendioxide_tropospheric_column'], 0, dtype=int).load().copy()
-    polluted_lightning_mask = clean_lightning_mask.copy()
+    clean_lightning_mask = xr.full_like(scn['nitrogendioxide_tropospheric_column'], 0, dtype=int).load().copy().rename('lightning_mask')
+    polluted_lightning_mask = clean_lightning_mask.copy().rename('lightning_mask')
+
+    # clean attributes
+    clean_lightning_mask = clean_lightning_mask.drop_vars('crs')
+    polluted_lightning_mask = polluted_lightning_mask.drop_vars('crs')
+    clean_lightning_mask.attrs = ''
+    polluted_lightning_mask.attrs = ''
 
     if not clean_cluster.empty:
         clean_cluster, clean_lightning_mask = convert_cluster(scn, clean_cluster, clean_lightning_mask, 'clean')

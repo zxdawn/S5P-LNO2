@@ -32,7 +32,7 @@ import xarray as xr
 from pandarallel import pandarallel
 from satpy import Scene
 
-from s5p_lnox_utils import *
+from s5p_lno2_utils import *
 
 filterwarnings("ignore")
 # Choose the following line for info or debugging:

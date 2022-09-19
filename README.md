@@ -76,7 +76,7 @@ The input paths are shown in parentheses. Please feel free to modify them in `se
 
 ### 1. L2 product with new variables (netCDF file)
 
-<details><summary>*s5p_lno2_main.py* adds lightning/fire data and lightning masks to simplified L2 product. (Click to expand)</summary>
+<details><summary>(Click to expand) s5p_lno2_main.py adds lightning/fire data and lightning masks to simplified L2 product. </summary>
 <p>
 
 | Varname                                        | Group     | Units                                                        | Description                                                  |
@@ -145,7 +145,7 @@ The input paths are shown in parentheses. Please feel free to modify them in `se
 
 ### 2. Lightning NO2 production and lifetime (netCDF file)
 
-The lightning no2 data (S5P_LNO2_production.nc and S5P_LNO2_lifetime.nc) includes the products above and other new retrievals (see [S5P-WRFCHEM](https://github.com/zxdawn/S5P-WRFChem/blob/master/doc/users_guide/S5P-WRFChem_UG_ch03_product.md), but we use a priori NO2 profile assuming guassian distributions instead of WRF--Chem results).
+The lightning no2 data (S5P_LNO2_production.nc and S5P_LNO2_lifetime.nc) includes the products of netCDF file and other new retrievals (see [S5P-WRFCHEM](https://github.com/zxdawn/S5P-WRFChem/blob/master/doc/users_guide/S5P-WRFChem_UG_ch03_product.md), but we use a priori NO2 profiles assuming guassian distributions instead of WRF--Chem results).
 
 ```
 - Case 1
@@ -189,3 +189,7 @@ The csv files contain two kinds of variable:
 - Lightning NO2 production efficiency based on consecutive swaths.
 
 csv head: time,case,swath,longitude,latitude,region,nlightning,area,apparent_scene_pressure,no2,lno2geo,lno2vis,lno2,pe_lno2geo,pe_lno2vis,pe_lno2
+
+## Publications
+
+Spaceborne observations of lightning NO2 in the Arctic (submitted)

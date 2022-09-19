@@ -173,6 +173,7 @@ def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, 
 
     # set the 30th percentile of SCD_Trop over the non-LNO2 region as background NO2
     scd_no2_bkgd = scd_no2.where(xr.ufuncs.isnan(masks_no2)).quantile(0.3)
+    #scd_no2_bkgd = scd_no2.where(xr.ufuncs.isnan(masks_no2)).quantile(0.1)
 
     lno2_vis = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_amf['amfTropVis']
     lno2_geo = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_mask['amf_geo']
@@ -187,6 +188,15 @@ def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, 
     lno2_mask = (ds_mask['cloud_radiance_fraction_nitrogendioxide_window'] > crf_min) & ~xr.ufuncs.isnan(masks_no2)
 
     return lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo
+
+# --- test ---
+from scipy import LowLevelCallable, integrate
+def integrate_lno2(top, bottom, compute_c):
+    '''Calculate the integration of LNO2 by setting the assumed peak pressure and peak width
+    The peak value (x) as assigned to 1,
+    because we calculate the ratio of integrations later, the peak value won't affect the result.
+    '''
+    return integrate.quad(compute_c, top, bottom)[0]
 
 
 def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_width=60, peak_offset=0):
@@ -273,15 +283,55 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
         # update the area as the segmentation area, instead of the large lightning mask area
         #   ds_mask['area'] = ds_mask['area'].where(lno2_mask)
         pcld = ds_mask['cloud_pressure_crb'].where(lno2_mask)/100
+        # --- test ---
+        pasp = ds_mask['apparent_scene_pressure'].where(lno2_mask)/100
+        psfc = ds_mask['surface_pressure'].where(lno2_mask)/100
 
         # set the cloud pressure as peak pressure disturbed by peak_offset
-        peak_pressure = pcld.min() + peak_offset
+        #peak_pressure = pcld.min() + peak_offset
+        peak_pressure = np.min([pcld.min() + peak_offset, 500])
+        ## --- test ---
+        #peak_pressure = np.min([ds_mask['apparent_scene_pressure'].where(lno2_mask).min()/100 + peak_offset, 500])
         logging.debug(f'Peak pressure is set as {peak_pressure}')
 
         # create the a priori lightning NO2 profile
         # Gaussian distribution of LNO2: $a * e^\frac{{-{(x - b)}^2}}{2c^{2}}$
         #   a is neglected because the division of integration offsets it
         factor = -1.0 / (2 * np.power(peak_width, 2))
+
+        ## --- test ---
+        #import numba as nb
+        #@nb.cfunc('float64(float64)')
+        #def compute_numba(x):
+        #    return np.exp(np.power(x - peak_pressure, 2) * factor)
+
+        #compute_c = LowLevelCallable(compute_numba.ctypes)
+
+        #lno2_tropo_cloud = np.full(ptropo.shape, np.nan)
+        #lno2_tropo_sfc = np.full(ptropo.shape, np.nan)
+
+        #for i in range(ptropo.shape[0]):
+        #    for j in range(ptropo.shape[1]):
+        #        lno2_tropo_cloud[i, j] = integrate_lno2(ptropo.values[i, j], pasp.values[i, j], compute_c)
+        #        lno2_tropo_sfc[i, j] = integrate_lno2(ptropo.values[i, j], psfc.values[i, j], compute_c)
+
+        ## # ---- bak: xarray version which is slower ---
+        ## lno2_tropo_cloud =  xr.apply_ufunc(integrate_lno2_xr,
+        ##                                    ptropo.chunk({'y': ptropo.sizes['y'],
+        ##                                                  'x': ptropo.sizes['x']}),
+        ##                                    pasp,
+        ##                                    peak_pressure, peak_width, vectorize=True,
+        ##                                    dask="parallelized", output_dtypes=[ptropo.dtype])
+
+        ## lno2_tropo_sfc =  xr.apply_ufunc(integrate_lno2_xr,
+        ##                                  ptropo.chunk({'y': ptropo.sizes['y'],
+        ##                                                'x': ptropo.sizes['x']}),
+        ##                                     psfc,
+        ##                                     peak_pressure, peak_width, vectorize=True,
+        ##                                     dask="parallelized", output_dtypes=[ptropo.dtype])
+
+        #lno2 = lno2_vis.where(lno2_mask) / (lno2_tropo_cloud/lno2_tropo_sfc)
+
         pclr = xr.concat([ds_mask['bot_p'], ds_mask['top_p'][-1, ...]], dim='layer')
         pclr = pclr.rolling({pclr.dims[0]: 2}).mean()[1:, ...]
         lno2_priori = np.exp(np.power(pclr - peak_pressure, 2) * factor)
@@ -307,7 +357,9 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
 def save_data(case_num, ds_group, ds_lightning, savedir):
     """Save masked data"""
     # get the saving path
-    output_file = os.path.join(savedir, f'S5P_LNO2_{kind}_test.nc')
+    output_file = os.path.join(savedir, f'S5P_LNO2_{kind}.nc')
+    #output_file = os.path.join(savedir, f'S5P_LNO2_{kind}_peakwidth80.nc')
+    #output_file = os.path.join(savedir, f'S5P_LNO2_{kind}_bkgd10.nc')
 
     # set compression
     comp = dict(zlib=True, complevel=7)
@@ -354,7 +406,7 @@ def main():
     for case_num, df_group in df.groupby('case'):
         logging.info(f'Case: {case_num}')
         for row_id, row in df_group.iterrows():
-            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2 = read_file(row, lut)
+            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2 = read_file(row, lut, peak_width=60)
 
             # merge calculated variables into one Dataset
             ds_merge = xr.merge([ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2])

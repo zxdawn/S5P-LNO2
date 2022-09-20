@@ -72,6 +72,8 @@ The input paths are shown in parentheses. Please feel free to modify them in `se
 
 ​		It is useful to know how many lightning happened inside the swaths before the TROPOMI overpass.
 
+4. Generate daily and summertime GLD360 data (gld360_daily.py and gld360_summer.py)
+
 ## Outputs
 
 ### 1. L2 product with new variables (netCDF file)

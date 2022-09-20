@@ -38,6 +38,7 @@ for name, group in df.groupby(df.index.date):
     # https://stackoverflow.com/a/47336762
     duplicated_group = pd.DataFrame(group.values.repeat(group.eventCount, axis=0), columns=group.columns,
                                     index=group.index.repeat(group.eventCount))
+    duplicated_group.index.names = ['timestamp']
     duplicated_group[['longitude','latitude','eventCount']].to_csv(save_dir+save_name, float_format='%.1f')
 
     # # if you just care the density, then it's fine to use `group` directly

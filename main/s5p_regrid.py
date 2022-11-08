@@ -33,7 +33,7 @@ bin_spatial = f'bin_spatial({tuple(lat_bins)}, {tuple(lon_bins)})'
 def pre_process(filename):
     '''Subset valid data in the Arctic'''
     operations = ';'.join(['latitude >= 60[degree_north]',
-                           'tropospheric_NO2_column_number_density_validity > 0.75',
+                           'tropospheric_NO2_column_number_density_validity > 75',
                            #'scene_pressure - 0.98*surface_pressure > 0',
                            'keep(datetime_start, orbit_index, latitude, longitude, \
                                  validity, solar_zenith_angle,  cloud_fraction, \

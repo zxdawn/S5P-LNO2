@@ -172,8 +172,8 @@ def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, 
     masks_no2 = masks_no2.where(masks_no2 > 0).rename({'dim_0': 'y', 'dim_1': 'x'})
 
     # set the 30th percentile of SCD_Trop over the non-LNO2 region as background NO2
-    scd_no2_bkgd = scd_no2.where(xr.ufuncs.isnan(masks_no2)).quantile(0.3)
-    #scd_no2_bkgd = scd_no2.where(xr.ufuncs.isnan(masks_no2)).quantile(0.1)
+    scd_no2_bkgd = scd_no2.where(np.isnan(masks_no2)).quantile(0.3)
+    #scd_no2_bkgd = scd_no2.where(np.isnan(masks_no2)).quantile(0.1)
 
     lno2_vis = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_amf['amfTropVis']
     lno2_geo = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_mask['amf_geo']
@@ -185,7 +185,7 @@ def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, 
 
     # update crf
     scene_mode(ds_mask)
-    lno2_mask = (ds_mask['cloud_radiance_fraction_nitrogendioxide_window'] > crf_min) & ~xr.ufuncs.isnan(masks_no2)
+    lno2_mask = (ds_mask['cloud_radiance_fraction_nitrogendioxide_window'] > crf_min) & ~np.isnan(masks_no2)
 
     return lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo
 

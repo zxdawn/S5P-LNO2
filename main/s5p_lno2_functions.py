@@ -106,7 +106,7 @@ def get_finite_scn(scn):
     no2_interp = no2_interp.isel(x=slice(1, -1))
 
     # get the array full of finite value
-    finite_mask = xr.ufuncs.isfinite(no2_interp).all(dim='x')
+    finite_mask = np.isfinite(no2_interp).all(dim='x')
     no2_finite = no2_interp.where(finite_mask, drop=True).expand_dims('time')
 
     return no2_finite

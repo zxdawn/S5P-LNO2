@@ -94,15 +94,14 @@ def calc_pe(filename, case, swaths, tau=6):
             area_t0 = ds_s5p_t0['area']
 
             # subset lightning to period between two swaths
-            ds_lightning_t1['delta'][:] = (ds_lightning_t1['time'] - overpass_t0) / np.timedelta64(1, 'h')
-            ds_lightning_t1.load()
-            delta_t1 = ds_lightning_t1.where(ds_lightning_t1['delta'] > 0, drop=True)['delta'].to_numpy()[:,np.newaxis]
+            delta_t0 = ds_lightning_t1['time'] - overpass_t0
+            delta_t1 = ds_lightning_t1.where(delta_t0 > 0, drop=True)['delta'].to_numpy()[:,np.newaxis]/60 # units: hour
 
             # how many lightning happened between swaths
             nlightning = delta_t1.size
 
             # efold_lifetime is the sum of factor
-            efold_lifetime = np.exp(-delta_t1/tau).sum()
+            efold_lifetime = np.exp(delta_t1/tau).sum()
 
             # calculate the summation of lno2
             lno2_t0 = (ds_s5p_t0['lno2']*area_t0).sum()
@@ -127,7 +126,7 @@ def calc_pe(filename, case, swaths, tau=6):
                 pe_lno2geo = np.nan
                 pe_lno2vis = np.nan
         else:
-            # how many lightning happened 100 mins before the overpass
+            # how many lightning happened during 100 mins before the overpass
             nlightning = sum(ds_lightning_t1['delta'] > -100).values
 
             pe_lno2 = np.nan
@@ -171,11 +170,11 @@ def main():
         pool.close()
         pool.join()
 
-    #for case in cases:
-    #    # get the group names of swath inside Case
-    #    swaths = list(sorted(ds_nc[case].groups.keys()))
-    #    df = calc_pe(filename, case, swaths)
-    #    res.append(df)
+    # for case in cases:
+    #     # get the group names of swath inside Case
+    #     swaths = list(sorted(ds_nc[case].groups.keys()))
+    #     df = calc_pe(filename, case, swaths)
+    #     res.append(df)
 
     # combine into one DataFrame
     # output = pd.concat(res, axis=0)

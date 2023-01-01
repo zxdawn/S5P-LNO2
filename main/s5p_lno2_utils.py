@@ -141,7 +141,8 @@ def load_lightning_fire(scn, t_overpass, cfg):
     df_lightning['timestamp'] = pd.to_datetime(df_lightning['timestamp'], utc=True)
     delta = df_lightning['timestamp'] - t_overpass
     df_lightning['delta'] = delta.dt.total_seconds()/60
-    subset = (-cfg['delta_time'] < df_lightning['delta']) & (df_lightning['delta'] < 0)
+    # add a 10-min tolerance
+    subset = (-cfg['delta_time'] < df_lightning['delta']) & (df_lightning['delta'] < 15)
     df_lightning = df_lightning[subset]
 
     df_viirs['time'] = pd.to_datetime(df_viirs['acq_date'] + ' ' + df_viirs['acq_time'], utc=True)

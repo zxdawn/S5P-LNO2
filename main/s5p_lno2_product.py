@@ -225,7 +225,7 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
     varnames = ['surface_albedo_nitrogendioxide_window', 'cloud_albedo_crb', 'surface_pressure', 'cloud_pressure_crb',
                 'snow_ice_flag', 'cloud_fraction_crb_nitrogendioxide_window', 'cloud_radiance_fraction_nitrogendioxide_window',
                 'solar_zenith_angle', 'viewing_zenith_angle', 'solar_azimuth_angle', 'viewing_azimuth_angle', 'amf_geo',
-                'apparent_scene_pressure', 'scene_albedo', 'bot_p', 'top_p',
+                'apparent_scene_pressure', 'scene_albedo', 'bot_p', 'top_p','processing_quality_flags',
                 'no2_vmr', 'temperature', 'tm5_tropopause_layer_index',
                 'nitrogendioxide_tropospheric_column', 'air_mass_factor_troposphere', 'SCD_Trop', 'lightning_mask']
 
@@ -243,6 +243,11 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
     t_overpass = pd.to_datetime(xr.broadcast(ds_tropomi['time_utc'], lightning_mask)[0]
                                 .where(lightning_mask, drop=True).stack(z=['y', 'x']).dropna(dim='z')).mean()
     t_overpass = t_overpass.to_datetime64()
+
+    # update the delta time between lightning and overpass time,
+    #   because previous overpass time is the mean time over a large region
+    ds_lightning['delta'][:] = (ds_lightning['time'] - t_overpass) / np.timedelta64(1, 'm')
+    ds_lightning = ds_lightning.where(ds_lightning['delta']<=0, drop=True)
 
     # calculate box-AMF
     s5p_origin, bAmfClr, bAmfCld, del_lut = cal_bamf(ds_mask, lut)

@@ -25,16 +25,38 @@ logging.basicConfig(level=logging.INFO)
 
 def main():
     # read the lno2 case data
-    case_list = glob(output_data_dir+'/lno2_cases_*csv')
-    logging.debug(f'    Reading {case_list} ...')
-    df = pd.concat(map(pd.read_csv, case_list))
+    file_list = glob(output_data_dir+'/lno2_cases_*csv')
+    logging.debug(f'    Reading {file_list} ...')
+
+    data = []
+    last_value = 0
+    
+    # Loop through files
+    for file in file_list:
+        # Read the file into a DataFrame
+        df_temp = pd.read_csv(file)
+    
+        # Continue the last value from the previous file in the current file
+        df_temp['case'] += last_value
+        last_value = df_temp.iloc[-1]['case'] + 1
+    
+        # different here: append the data
+        data.append(df_temp)
+    
+    df = pd.concat(data)
 
     if kind == 'fresh_lightning':
         # for safety, we use at least 10 lightning in the mask to filter convective cases
         df = df[df['fresh_lightning'] > 10].reset_index()
     elif kind == 'no_lightning':
-        # this is useful for estimating lightning NO2 lifetim
-        df = df[df['fresh_lightning'] == 0].reset_index()
+        # this is useful for estimating lightning NO2 lifetime
+        
+        # create boolean masks which are true when `fresh_lightning` is <=5 and previous `case` is the same
+        mask = (df.case.eq(df.case.shift())) & (df['fresh_lightning']<=5)
+        
+        # concat previous rows and fresh_lightning<=5 rows
+        df = pd.concat([df[mask.shift(-1).fillna(False)], df[df['fresh_lightning']<=5]]).sort_values(['case', 'filename'])
+        df = df.drop_duplicates(keep='first').reset_index()
 
     # caculate the difference between indexes
     diff = df['index'].diff().bfill()

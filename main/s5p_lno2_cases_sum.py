@@ -66,8 +66,8 @@ def main():
     df = df.groupby(diff.ne(1).cumsum()).filter(lambda d: len(d) > 1)
 
     # assign new case No.
-    #   https://stackoverflow.com/a/50723193/7347925
-    df['case'] = df['index'].diff().ne(1).cumsum().sub(1)
+    #   https://stackoverflow.com/a/74979132/7347925
+    df['case'] = df.groupby('case')['index'].diff().ne(1).cumsum().factorize()[0]
 
     # clean columns and index
     df = df.reset_index(drop=True)

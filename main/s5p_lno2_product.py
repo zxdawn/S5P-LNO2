@@ -199,7 +199,7 @@ def integrate_lno2(top, bottom, compute_c):
     return integrate.quad(compute_c, top, bottom)[0]
 
 
-def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_width=60, peak_offset=0):
+def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_width=180, peak_offset=0):
     # read processed S5P data file
     filename = row['filename']
     ds_tropomi = xr.open_dataset(filename, group='S5P').isel(time=0)
@@ -411,7 +411,7 @@ def main():
     for case_num, df_group in df.groupby('case'):
         logging.info(f'Case: {case_num}')
         for row_id, row in df_group.iterrows():
-            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2 = read_file(row, lut, peak_width=60)
+            t_overpass, ds_mask, ds_amf, ds_lightning, ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2 = read_file(row, lut, peak_width=180)
 
             # merge calculated variables into one Dataset
             ds_merge = xr.merge([ptropo, scd_no2_bkgd, amflno2, lno2_mask, lno2vis, lno2geo, lno2])

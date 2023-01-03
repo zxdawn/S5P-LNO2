@@ -160,7 +160,7 @@ def segmentation(threshold, target='maximum', method='watershed'):
     return parameters_segmentation
 
 
-def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, features, crf_min):
+def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, quantile_bkgd, features, crf_min):
     """Get the segmentation of NO2 and calculate LNO2Vis"""
     # set parameters_segmentation
     parameters_segmentation = segmentation(np.min(threshold))
@@ -172,8 +172,7 @@ def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, 
     masks_no2 = masks_no2.where(masks_no2 > 0).rename({'dim_0': 'y', 'dim_1': 'x'})
 
     # set the 30th percentile of SCD_Trop over the non-LNO2 region as background NO2
-    scd_no2_bkgd = scd_no2.where(np.isnan(masks_no2)).quantile(0.3)
-    #scd_no2_bkgd = scd_no2.where(np.isnan(masks_no2)).quantile(0.1)
+    scd_no2_bkgd = scd_no2.where(np.isnan(masks_no2)).quantile(quantile_bkgd)
 
     lno2_vis = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_amf['amfTropVis']
     lno2_geo = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_mask['amf_geo']
@@ -199,7 +198,7 @@ def integrate_lno2(top, bottom, compute_c):
     return integrate.quad(compute_c, top, bottom)[0]
 
 
-def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_width=180, peak_offset=0):
+def read_file(row, lut, crf_min=0, alpha_high=0.2, quantile_bkgd=0.3, peak_width=180, peak_offset=0):
     # read processed S5P data file
     filename = row['filename']
     ds_tropomi = xr.open_dataset(filename, group='S5P').isel(time=0)
@@ -282,7 +281,7 @@ def read_file(row, lut, tau=6, crf_min=0, alpha_high=0.2, alpha_bkgd=0.5, peak_w
     else:
         # calculate LNO2Vis and LNO2Geo
         #   lno2_mask is the segmentation of SCDTrop larger than background SCD
-        lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo = calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, alpha_bkgd, features, crf_min)
+        lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo = calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, quantile_bkgd, features, crf_min)
 
         # subset data by segmentation mask
         # update the area as the segmentation area, instead of the large lightning mask area

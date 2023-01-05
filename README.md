@@ -155,7 +155,7 @@ The lightning no2 data (S5P_LNO2_production.nc and S5P_LNO2_lifetime.nc) include
 	-	Swath xxx
 		- S5P
 		 - .......... (official S5P data as shown above)
-		 - SCD_Trop
+		 - scdTrop
 		 - lightning_mask
 		 - area
 		 - amfTrop

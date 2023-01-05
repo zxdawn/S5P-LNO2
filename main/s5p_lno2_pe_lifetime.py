@@ -95,7 +95,7 @@ def calc_pe(filename, case, swaths, tau=6):
 
             # subset lightning to period between two swaths
             delta_t0 = ds_lightning_t1['time'] - overpass_t0
-            delta_t1 = ds_lightning_t1.where(delta_t0 > 0, drop=True)['delta'].to_numpy()[:,np.newaxis]/60 # units: hour
+            delta_t1 = ds_lightning_t1.where(delta_t0.dt.seconds > 0, drop=True)['delta'].to_numpy()[:,np.newaxis]/60 # units: hour
 
             # how many lightning happened between swaths
             nlightning = delta_t1.size

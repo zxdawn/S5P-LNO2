@@ -16,7 +16,8 @@ OUTPUT:
 UPDATE:
     Xin Zhang:
        2022-05-16: Basic
-       2022-07-21: Set the 30th percentile of SCD_Trop as SCD_bkgd
+       2022-07-21: Set the 30th percentile of scdTrop as SCD_bkgd
+       2023-01-03: Set the 30th percentile of vcdTrop as VCD_bkgd and multiply AMF_Trop to get SCD_bkgd
 '''
 
 import logging
@@ -44,13 +45,13 @@ logging.basicConfig(level=logging.INFO)
 def update_vars(ds):
     ds['amf_geo'] = 1/np.cos(np.radians(ds['solar_zenith_angle'])) + 1/np.cos(np.radians(ds['viewing_zenith_angle']))
 
-    ds['SCD_Strato'] = ds['nitrogendioxide_stratospheric_column'] * ds['air_mass_factor_stratosphere']
-    ds['SCD_Trop'] = ds['nitrogendioxide_slant_column_density'] - ds['SCD_Strato']
+    ds['scdStrato'] = ds['nitrogendioxide_stratospheric_column'] * ds['air_mass_factor_stratosphere']
+    ds['scdTrop'] = ds['nitrogendioxide_slant_column_density'] - ds['scdStrato']
 
-    ds['SCD_Strato'] = ds['SCD_Strato'].rename('SCD_Strato')
-    ds['SCD_Trop'] = ds['SCD_Trop'].rename('SCD_Trop')
-    ds['SCD_Strato'].attrs['units'] = 'mol m-2'
-    ds['SCD_Trop'].attrs['units'] = 'mol m-2'
+    ds['scdStrato'] = ds['scdStrato'].rename('scdStrato')
+    ds['scdTrop'] = ds['scdTrop'].rename('scdTrop')
+    ds['scdStrato'].attrs['units'] = 'mol m-2'
+    ds['scdTrop'].attrs['units'] = 'mol m-2'
 
     # calculate pressure levels
     a = ds['tm5_constant_a']
@@ -119,17 +120,17 @@ def feature(threshold, target='maximum',
 
 def get_feature(ds_mask, alpha_high):
     # fill few nan values
-    scd_no2 = ds_mask['SCD_Trop'].rio.write_crs(4326).rio.write_nodata(np.nan).rio.interpolate_na(method='linear').drop_vars('spatial_ref').rename('scdTrop')
-    scd_no2.load()
+    vcd_no2 = ds_mask['nitrogendioxide_tropospheric_column'].rio.write_crs(4326).rio.write_nodata(np.nan).rio.interpolate_na(method='linear').drop_vars('spatial_ref').rename('vcdTrop')
+    vcd_no2.load()
 
     # normalize the SCD data
-    scd_no2_norm = (scd_no2 - scd_no2.min()) / (scd_no2.max() - scd_no2.min())
+    vcd_no2_norm = (vcd_no2 - vcd_no2.min()) / (vcd_no2.max() - vcd_no2.min())
 
     # Initialize model
     dist = distfit(distr='lognorm', alpha=alpha_high)
 
     # Find best theoretical distribution for empirical data X
-    dist.fit_transform(scd_no2_norm.stack(z=['y', 'x'])[~np.isnan(scd_no2_norm.stack(z=['y', 'x']))].values, verbose=0)
+    dist.fit_transform(vcd_no2_norm.stack(z=['y', 'x'])[~np.isnan(vcd_no2_norm.stack(z=['y', 'x']))].values, verbose=0)
 
     dxy = 5000  # data resolution; Unit: m
 
@@ -144,9 +145,9 @@ def get_feature(ds_mask, alpha_high):
     parameters_features = feature(threshold)
 
     # get features
-    features = tobac.themes.tobac_v1.feature_detection_multithreshold(scd_no2_norm.expand_dims('time'), dxy, **parameters_features)
+    features = tobac.themes.tobac_v1.feature_detection_multithreshold(vcd_no2_norm.expand_dims('time'), dxy, **parameters_features)
 
-    return threshold, scd_no2, scd_no2_norm, features
+    return threshold, vcd_no2, vcd_no2_norm, features
 
 
 def segmentation(threshold, target='maximum', method='watershed'):
@@ -160,22 +161,22 @@ def segmentation(threshold, target='maximum', method='watershed'):
     return parameters_segmentation
 
 
-def calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, quantile_bkgd, features, crf_min):
+def calc_lno2vis(vcd_no2, vcd_no2_norm, ds_mask, ds_amf, threshold, quantile_bkgd, features, crf_min):
     """Get the segmentation of NO2 and calculate LNO2Vis"""
     # set parameters_segmentation
     parameters_segmentation = segmentation(np.min(threshold))
 
     # get masks and paired features
     dxy = 5000  # data resolution; Unit: m
-    masks_no2, features_no2 = tobac.themes.tobac_v1.segmentation(features, scd_no2_norm.expand_dims('time'), dxy, **parameters_segmentation)
+    masks_no2, features_no2 = tobac.themes.tobac_v1.segmentation(features, vcd_no2_norm.expand_dims('time'), dxy, **parameters_segmentation)
 
     masks_no2 = masks_no2.where(masks_no2 > 0).rename({'dim_0': 'y', 'dim_1': 'x'})
 
-    # set the 30th percentile of SCD_Trop over the non-LNO2 region as background NO2
-    scd_no2_bkgd = scd_no2.where(np.isnan(masks_no2)).quantile(quantile_bkgd)
+    # set the 30th percentile of vcdTrop over the non-LNO2 region as background NO2
+    scd_no2_bkgd = vcd_no2.where(np.isnan(masks_no2)).quantile(quantile_bkgd)*ds_mask['air_mass_factor_troposphere']
 
-    lno2_vis = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_amf['amfTropVis']
-    lno2_geo = (ds_mask['SCD_Trop'] - scd_no2_bkgd) / ds_mask['amf_geo']
+    lno2_vis = (ds_mask['scdTrop'] - scd_no2_bkgd) / ds_amf['amfTropVis']
+    lno2_geo = (ds_mask['scdTrop'] - scd_no2_bkgd) / ds_mask['amf_geo']
     lno2_vis.load()
     # lno2_vis = xr.DataArray(lno2_vis, dims=['y', 'x']).assign_coords(longitude=ds_mask['longitude'])
 
@@ -226,7 +227,7 @@ def read_file(row, lut, crf_min=0, alpha_high=0.2, quantile_bkgd=0.3, peak_width
                 'solar_zenith_angle', 'viewing_zenith_angle', 'solar_azimuth_angle', 'viewing_azimuth_angle', 'amf_geo',
                 'apparent_scene_pressure', 'scene_albedo', 'bot_p', 'top_p','processing_quality_flags',
                 'no2_vmr', 'temperature', 'tm5_tropopause_layer_index',
-                'nitrogendioxide_tropospheric_column', 'air_mass_factor_troposphere', 'SCD_Trop', 'lightning_mask']
+                'nitrogendioxide_tropospheric_column', 'air_mass_factor_troposphere', 'scdTrop', 'lightning_mask']
 
     # Dataset in the lightning mask
     ds_mask = ds_tropomi[varnames].where(lightning_mask, drop=True)
@@ -256,8 +257,8 @@ def read_file(row, lut, crf_min=0, alpha_high=0.2, quantile_bkgd=0.3, peak_width
                      xr.merge([ds_mask['no2_vmr'].rename('no2'), ds_mask['temperature'].rename('tk')]),
                      bAmfClr, bAmfCld)
 
-    # detect the feature using the masked SCD NO2
-    threshold, scd_no2, scd_no2_norm, features = get_feature(ds_mask, alpha_high)
+    # detect the feature using the masked VCD NO2
+    threshold, vcd_no2, vcd_no2_norm, features = get_feature(ds_mask, alpha_high)
 
     if not features:
         # no features are detected
@@ -281,7 +282,7 @@ def read_file(row, lut, crf_min=0, alpha_high=0.2, quantile_bkgd=0.3, peak_width
     else:
         # calculate LNO2Vis and LNO2Geo
         #   lno2_mask is the segmentation of SCDTrop larger than background SCD
-        lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo = calc_lno2vis(scd_no2, scd_no2_norm, ds_mask, ds_amf, threshold, quantile_bkgd, features, crf_min)
+        lno2_mask, scd_no2_bkgd, lno2_vis, lno2_geo = calc_lno2vis(vcd_no2, vcd_no2_norm, ds_mask, ds_amf, threshold, quantile_bkgd, features, crf_min)
 
         # subset data by segmentation mask
         # update the area as the segmentation area, instead of the large lightning mask area

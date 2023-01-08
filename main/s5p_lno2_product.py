@@ -295,6 +295,8 @@ def read_file(row, lut, crf_min=0, alpha_high=0.2, quantile_bkgd=0.3, peak_width
         # set the cloud pressure as peak pressure disturbed by peak_offset
         #peak_pressure = pcld.min() + peak_offset
         peak_pressure = np.min([pcld.min() + peak_offset, 500])
+        # lower than tropopause
+        peak_pressure = np.max([peak_pressure, ptropo.min()])
         ## --- test ---
         #peak_pressure = np.min([ds_mask['apparent_scene_pressure'].where(lno2_mask).min()/100 + peak_offset, 500])
         logging.debug(f'Peak pressure is set as {peak_pressure}')

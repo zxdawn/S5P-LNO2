@@ -1,6 +1,6 @@
 # S5P-LNO2
 
-Core code for the TROPOMI lightning NO2 (LNO2) retrievals.
+Core code for the TROPOMI lightning NO2 (LNO2) retrievals. Some useful Jupyter Notebooks are available at [S5P-LNO2-Notebook](https://github.com/zxdawn/S5P-LNO2-Notebook).
 
 - [x] Pairing lightning and fire data with TROPOMI NO2 L2 product considering the transport
 - [x] LNO2 mask
@@ -195,4 +195,4 @@ csv head: time,case,swath,longitude,latitude,region,nlightning,area,apparent_sce
 
 ## Publications
 
-Spaceborne observations of lightning NO2 in the Arctic (submitted)
+Spaceborne observations of lightning NO2 in the Arctic (In Review, ES&T)

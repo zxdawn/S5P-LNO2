@@ -150,6 +150,9 @@ The input paths are shown in parentheses. Please feel free to modify them in `se
 
 The lightning no2 data (S5P_LNO2_production.nc and S5P_LNO2_lifetime.nc) includes the products of netCDF file and other new retrievals (see [S5P-WRFCHEM](https://github.com/zxdawn/S5P-WRFChem/blob/master/doc/users_guide/S5P-WRFChem_UG_ch03_product.md), but we use a priori NO2 profiles assuming guassian distributions instead of WRF--Chem results).
 
+<details><summary>(Click to expand) Data Structure </summary>
+<p>
+
 ```
 - Case 1
 	-	Swath xxx
@@ -183,6 +186,9 @@ The lightning no2 data (S5P_LNO2_production.nc and S5P_LNO2_lifetime.nc) include
 - Case 2
 .....
 ```
+
+</p>
+</details>
 
 ### 3. Lightning NO2 production and lifetime (csv file)
 

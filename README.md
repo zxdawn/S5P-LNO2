@@ -1,5 +1,7 @@
 # S5P-LNO2
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7549851.svg)](https://doi.org/10.5281/zenodo.7549851)
+
 Core code for the TROPOMI lightning NO2 (LNO2) retrievals. Some useful Jupyter Notebooks are available at [S5P-LNO2-Notebook](https://github.com/zxdawn/S5P-LNO2-Notebook).
 
 - [x] Pairing lightning and fire data with TROPOMI NO2 L2 product considering the transport

@@ -8,7 +8,7 @@ Core code for the TROPOMI lightning NO2 (LNO2) retrievals. Some useful Jupyter N
 - [x] Retrieval of lightning NO2 vertical column density
 - [x] LNO2 production efficiency based on consecutive swaths data
 - [ ] [TROPOMI CO data for wildfire](https://github.com/zxdawn/S5P-LNO2/issues/13)
-- [ ] [Integration of cloud slicing](https://github.com/zxdawn/S5P-LNO2/issues/16)
+- [ ] [Integration of cloud slicing](https://github.com/zxdawn/S5P-LNO2/issues/16) (see [forked era-uptrop](https://github.com/zxdawn/erc-uptrop))
 
 ## Main workflow
 

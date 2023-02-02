@@ -203,4 +203,4 @@ csv head: time,case,swath,longitude,latitude,region,nlightning,area,apparent_sce
 
 ## Publications
 
-Spaceborne observations of lightning NO2 in the Arctic (In Review, ES&T)
+Zhang et al., [**Spaceborne observations of lightning NO2 in the Arctic**](https://doi.org/10.1021/acs.est.2c07988), *Environ. Sci. Technol.*
